@@ -1,16 +1,44 @@
-# React + Vite
+# ✮ The Silly Stitch
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A small online crochet store for handmade, affordable pieces — built for college students looking for cute gifts that don't break the bank.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## What is this?
 
-## React Compiler
+The Silly Stitch is a personal store website where customers can browse and order handmade crochet products. Orders are placed through WhatsApp, keeping things simple and personal.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## Who is it for?
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+College students and young people who want:
+- Affordable handmade gifts
+- Something more personal than Amazon
+- Cute crochet pieces for themselves or their people
+
+---
+
+## How to navigate
+
+**Home** — Landing page with a short intro and any active announcements (sales, restocks, custom order slots opening, etc.)
+
+**Shop** — Browse all products. Filter by category, price, or search by name. Tap a product to see more details and add it to your cart.
+
+**Cart** — Review your items, fill in your name, phone, and email, then place your order. You'll be redirected to WhatsApp with everything prefilled — just hit send.
+
+**Contact** — For questions, custom requests, or anything else. Send a DM on Instagram or fill out the email form.
+
+---
+
+## Screenshots
+
+> _Add screenshots here once the site is live_
+
+| Home | Shop | Cart |
+|------|------|------|
+| ![Home]() | ![Shop]() | ![Cart]() |
+
+---
+
+*Made with <3 by Aviral*
