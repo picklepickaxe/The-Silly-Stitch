@@ -21,13 +21,13 @@ College students and young people who want:
 
 ## How to navigate
 
-**Home** — Landing page with a short intro and any active announcements (sales, restocks, custom order slots opening, etc.)
+**Home**: Landing page with a short intro and any active announcements (sales, restocks, custom order slots opening, etc.)
 
-**Shop** — Browse all products. Filter by category, price, or search by name. Tap a product to see more details and add it to your cart.
+**Shop**: Browse all products. Filter by category, price, or search by name. Tap a product to see more details and add it to your cart.
 
-**Cart** — Review your items, fill in your name, phone, and email, then place your order. You'll be redirected to WhatsApp with everything prefilled — just hit send.
+**Cart**: Review your items, fill in your name, phone, and email, then place your order. You'll be redirected to WhatsApp with everything prefilled — just hit send.
 
-**Contact** — For questions, custom requests, or anything else. Send a DM on Instagram or fill out the email form.
+**Contact**: For questions, custom requests, or anything else. Send a DM on Instagram or fill out the email form.
 
 ---
 
