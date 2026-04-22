@@ -1,67 +1,18 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { Link } from "react-router-dom";
-import { collection, getDocs } from "firebase/firestore";
+import { useEffect, useState, useRef, useCallback } from "react";
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  startAfter,
+} from "firebase/firestore";
 import { db } from "../firebase/Config";
 import PageContainer from "../components/PageContainer";
 import ProductCard from "../components/ProductCard";
 import { useCart } from "../context/CartContext";
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
-function CartToast({ visible, productName }) {
-  return (
-    <div className={`
-      fixed top-5 left-1/2 -translate-x-1/2 z-[60]
-      w-[min(92vw,420px)]
-      bg-[#2a1f3d] dark:bg-[#f3e5f7]
-      border border-[#5b3f77] dark:border-[#d1b1dd]
-      text-[#fff7ef] dark:text-[#5b4368]
-      px-4 py-3 rounded-2xl
-      shadow-[0_14px_32px_rgba(58,38,74,0.35)] dark:shadow-[0_12px_28px_rgba(182,146,197,0.28)]
-      text-sm font-medium
-      transition-all duration-300
-      ${visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 pointer-events-none"}
-    `}>
-      <div className="flex flex-col leading-tight">
-        <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[#e9d8f2] dark:text-[#886596]">
-          Cart updated
-        </span>
-        <span className="break-words">
-          <span className="font-semibold">{productName}</span> added to cart.
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ─── Sticky Cart Bar ──────────────────────────────────────────────────────────
-function StickyCartBar({ totalItems, totalPrice }) {
-  if (totalItems === 0) return null;
-
-  return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 px-4 pb-4">
-      <Link
-        to="/cart"
-        className="
-          flex items-center justify-between
-          w-full max-w-lg mx-auto
-          bg-yarn dark:bg-[#2a1f3d]
-          text-white dark:text-[#e0d4f0]
-          px-5 py-3.5 rounded-2xl
-          shadow-[0_8px_32px_rgba(107,78,113,0.35)]
-          active:scale-95 transition-transform duration-150
-        "
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-lg">🛒</span>
-          <span className="font-semibold text-sm">Go to Cart</span>
-        </div>
-        <div className="flex items-center text-sm">
-          <span className="font-bold">₹{totalPrice}</span>
-        </div>
-      </Link>
-    </div>
-  );
-}
+const PAGE_SIZE = 12;
 
 // ─── Product Overlay ──────────────────────────────────────────────────────────
 function ProductOverlay({ product, onClose, onAddToCart }) {
@@ -75,7 +26,7 @@ function ProductOverlay({ product, onClose, onAddToCart }) {
       : ["/placeholder.webp"];
 
   return (
-    <div className="fixed inset-0 z-[70]">
+    <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="
         absolute bottom-0 w-full bg-white dark:bg-[#16122a] rounded-t-3xl p-6
@@ -85,7 +36,14 @@ function ProductOverlay({ product, onClose, onAddToCart }) {
       ">
         <div className="flex gap-4 overflow-x-auto mb-4">
           {imageList.map((img, i) => (
-            <img key={i} src={img} alt="" className="w-40 h-40 rounded-xl object-cover flex-shrink-0" />
+            <img
+              key={i}
+              src={img}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="w-40 h-40 rounded-xl object-cover flex-shrink-0"
+            />
           ))}
         </div>
         <h2 className="text-2xl font-bold dark:text-[#e0d4f0]">{product.name}</h2>
@@ -103,28 +61,7 @@ function ProductOverlay({ product, onClose, onAddToCart }) {
 }
 
 // ─── Shop Navbar ──────────────────────────────────────────────────────────────
-function normalizeCategory(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function getProductCategories(product) {
-  const fromArray = Array.isArray(product?.categories) ? product.categories : [];
-  const legacyCategory = product?.category ? [product.category] : [];
-  const unique = new Set();
-  [...fromArray, ...legacyCategory].forEach((item) => {
-    const normalized = normalizeCategory(item);
-    if (normalized) unique.add(normalized);
-  });
-  return Array.from(unique);
-}
-
-function formatCategoryLabel(category) {
-  return String(category || "").replaceAll("_", " ");
-}
+const CATEGORIES = ["all", "keychain", "plushie", "bracelet", "accessory", "custom"];
 
 const PRICE_OPTIONS = [
   { label: "All prices", value: "all" },
@@ -135,15 +72,17 @@ const PRICE_OPTIONS = [
   { label: "Under ₹500", value: 500 },
 ];
 
-function ShopNavbar({ categories, category, setCategory, priceFilter, setPriceFilter, search, setSearch }) {
+function ShopNavbar({ category, setCategory, priceFilter, setPriceFilter, search, setSearch }) {
   return (
     <div className="sticky top-0 z-20 mb-4">
       <div className="relative overflow-hidden rounded-2xl border border-[#ead8bd] dark:border-[#3b2f53] bg-gradient-to-br from-[#fff7e8]/95 via-[#fffdf6]/95 to-[#fdeedf]/95 dark:from-[#1b152c]/95 dark:via-[#181226]/95 dark:to-[#221a34]/95 px-4 py-3 shadow-[0_10px_28px_rgba(107,78,113,0.14)] backdrop-blur-xl">
         <span className="pointer-events-none absolute -top-10 -right-6 h-24 w-24 rounded-full bg-pinky/40 blur-2xl motion-safe:animate-[pulse_4s_ease-in-out_infinite]" />
         <span className="pointer-events-none absolute -bottom-10 -left-8 h-24 w-24 rounded-full bg-yarn/25 blur-2xl motion-safe:animate-[pulse_5s_ease-in-out_infinite]" />
+
         <div className="relative flex flex-col gap-3">
+          {/* Categories */}
           <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-            {categories.map((c) => (
+            {CATEGORIES.map((c) => (
               <button
                 key={c}
                 onClick={() => setCategory(c)}
@@ -153,10 +92,12 @@ function ShopNavbar({ categories, category, setCategory, priceFilter, setPriceFi
                     : "border-yarn/25 bg-white/55 dark:bg-[#241a38]/45 text-text dark:text-[#d4c6ea] hover:border-yarn/55 hover:bg-white/80 dark:hover:bg-[#2d2144]/70 hover:-translate-y-0.5"
                   }`}
               >
-                {c === "all" ? "All" : formatCategoryLabel(c)}
+                {c === "all" ? "All" : c}
               </button>
             ))}
           </div>
+
+          {/* Price filters */}
           <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
             {PRICE_OPTIONS.map((p) => (
               <button
@@ -172,6 +113,8 @@ function ShopNavbar({ categories, category, setCategory, priceFilter, setPriceFi
               </button>
             ))}
           </div>
+
+          {/* Search */}
           <div className="group relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-yarn/55 text-sm transition-transform duration-300 group-focus-within:scale-110">🔍︎</span>
             <input
@@ -190,98 +133,161 @@ function ShopNavbar({ categories, category, setCategory, priceFilter, setPriceFi
 
 // ─── Shop Page ────────────────────────────────────────────────────────────────
 export default function Shop() {
-  const [products, setProducts]               = useState([]);
-  const [loading, setLoading]                 = useState(true);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [category, setCategory]               = useState("all");
-  const [priceFilter, setPriceFilter]         = useState("all");
-  const [search, setSearch]                   = useState("");
+  const [products, setProducts]                 = useState([]);
+  const [loading, setLoading]                   = useState(true);
+  const [loadingMore, setLoadingMore]           = useState(false);
+  const [hasMore, setHasMore]                   = useState(true);
+  const [selectedProduct, setSelectedProduct]   = useState(null);
 
-  // Toast state
-  const [toastVisible, setToastVisible]       = useState(false);
-  const [toastProduct, setToastProduct]       = useState("");
-  const toastTimer                            = useRef(null);
+  const [category, setCategory]     = useState("all");
+  const [priceFilter, setPriceFilter] = useState("all");
+  const [search, setSearch]         = useState("");
 
-  const { addToCart, totalItems, totalPrice } = useCart();
+  // Firestore cursor — holds the last DocumentSnapshot of the previous page
+  const lastDocRef = useRef(null);
 
-  const handleAddToCart = useCallback((product) => {
-    addToCart(product);
-    setToastProduct(product.name);
-    setToastVisible(true);
+  // Sentinel div at the bottom of the grid — watched by IntersectionObserver
+  const sentinelRef = useRef(null);
 
-    // Clear any existing timer
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToastVisible(false), 2500);
-  }, [addToCart]);
+  const { addToCart } = useCart();
 
+  // ── Fetch a page from Firestore ──────────────────────────────────────────
+  const fetchPage = useCallback(async (isFirstPage = false) => {
+    // Guard: don't double-fetch while one is in flight
+    if (!isFirstPage && (loadingMore || !hasMore)) return;
+
+    isFirstPage ? setLoading(true) : setLoadingMore(true);
+
+    try {
+      let q = query(
+        collection(db, "products"),
+        orderBy("name"),          // keep a consistent order; change to "createdAt" etc. as needed
+        limit(PAGE_SIZE),
+        ...(isFirstPage || !lastDocRef.current
+          ? []
+          : [startAfter(lastDocRef.current)])
+      );
+
+      const snapshot = await getDocs(q);
+
+      const newProducts = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Remember the last doc for the next page cursor
+      lastDocRef.current = snapshot.docs[snapshot.docs.length - 1] ?? null;
+
+      // If we got fewer docs than PAGE_SIZE, we've reached the end
+      if (snapshot.docs.length < PAGE_SIZE) setHasMore(false);
+
+      setProducts((prev) => (isFirstPage ? newProducts : [...prev, ...newProducts]));
+    } catch (err) {
+      console.error("Failed to fetch products:", err);
+    } finally {
+      isFirstPage ? setLoading(false) : setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore]);
+
+  // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
-    return () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    };
+    setProducts([]);
+    setHasMore(true);
+    lastDocRef.current = null;
+    fetchPage(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Reset & re-fetch when filters change ─────────────────────────────────
+  // NOTE: category / priceFilter / search are applied CLIENT-SIDE below.
+  // If your catalogue grows large, move these to Firestore `where()` clauses
+  // and trigger a fresh fetchPage(true) on each filter change instead.
+
+  // ── IntersectionObserver — fires when sentinel enters the viewport ─────────
   useEffect(() => {
-    async function fetchProducts() {
-      const snapshot = await getDocs(collection(db, "products"));
-      setProducts(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }
-    fetchProducts();
-  }, []);
+    if (!sentinelRef.current) return;
 
-  const categoryOptions = useMemo(() => {
-    const discovered = products.flatMap((product) => getProductCategories(product));
-    const unique = Array.from(new Set(discovered)).sort((a, b) => a.localeCompare(b));
-    return ["all", ...unique];
-  }, [products]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          fetchPage(false);
+        }
+      },
+      { rootMargin: "200px" } // start loading 200 px before the sentinel is visible
+    );
 
-  useEffect(() => {
-    if (category !== "all" && !categoryOptions.includes(category)) {
-      setCategory("all");
-    }
-  }, [category, categoryOptions]);
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, fetchPage]);
 
+  // ── Client-side filtering ─────────────────────────────────────────────────
   const filteredProducts = products.filter((p) => {
-    const productCategories = getProductCategories(p);
-    const categoryMatch = category === "all" || productCategories.includes(category);
-    const priceMatch    = priceFilter === "all" || Number(p.price) <= priceFilter;
-    const searchMatch   = String(p.name || "").toLowerCase().includes(search.toLowerCase());
+    const categoryMatch = category === "all" || p.category === category;
+    const priceMatch    = priceFilter === "all" || p.price <= priceFilter;
+    const searchMatch   = p.name.toLowerCase().includes(search.toLowerCase());
     return categoryMatch && priceMatch && searchMatch;
   });
 
   return (
     <PageContainer variant="tight">
-      <CartToast visible={toastVisible} productName={toastProduct} />
+      <h1 className="text-2xl sm:text-3xl font-extrabold font-poiret text-yarn mb-4 text-center">
+        Shop Handmade Crochet
+      </h1>
 
-      <div className="pt-3">
-        <ShopNavbar
-          categories={categoryOptions}
-          category={category}       setCategory={setCategory}
-          priceFilter={priceFilter} setPriceFilter={setPriceFilter}
-          search={search}           setSearch={setSearch}
-        />
-      </div>
+      <ShopNavbar
+        category={category}       setCategory={setCategory}
+        priceFilter={priceFilter} setPriceFilter={setPriceFilter}
+        search={search}           setSearch={setSearch}
+      />
 
+      {/* Initial full-page load */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-4">
+          {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+            <ProductCard key={`skeleton-init-${i}`} skeleton />
+          ))}
+        </div>
+      )}
+
+      {/* Empty states */}
       {!loading && filteredProducts.length === 0 && (
         <p className="text-center text-gray-500 mt-10">
-          {products.length === 0 ? "No products yet." : "No products match your filters."}
+          {products.length === 0
+            ? "No products yet."
+            : "No products match your filters."}
         </p>
       )}
 
-      {/* Extra bottom padding so last row isn't hidden behind sticky bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 p-4 pb-24">
-        {filteredProducts.map((p) => (
-          <ProductCard key={p.id} product={p} onClick={setSelectedProduct} />
-        ))}
-      </div>
+      {/* Product grid */}
+      {!loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-4">
+          {filteredProducts.map((p) => (
+            <ProductCard key={p.id} product={p} onClick={setSelectedProduct} />
+          ))}
+
+          {/* "Loading more" skeleton tiles appended at the end of the same grid */}
+          {loadingMore &&
+            Array.from({ length: 4 }).map((_, i) => (
+              <ProductCard key={`skeleton-more-${i}`} skeleton />
+            ))}
+        </div>
+      )}
+
+      {/* Sentinel — observed by IntersectionObserver to trigger next page */}
+      <div ref={sentinelRef} className="h-1" aria-hidden="true" />
+
+      {/* End-of-catalogue message */}
+      {!hasMore && !loading && products.length > 0 && (
+        <p className="text-center text-gray-400 dark:text-[#6b5a80] text-sm py-8">
+          You have seen everything!
+        </p>
+      )}
 
       <ProductOverlay
         product={selectedProduct}
         onClose={() => setSelectedProduct(null)}
-        onAddToCart={handleAddToCart}
+        onAddToCart={addToCart}
       />
-
-      <StickyCartBar totalItems={totalItems} totalPrice={totalPrice} />
     </PageContainer>
   );
 }

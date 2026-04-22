@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../firebase/Config";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { suggestDeadline } from "../utils/scheduling";
 
 // ─────────────────────────────────────────────
 // Colour tokens
@@ -38,12 +37,14 @@ const STATUS_META = {
 
 const ADMIN_ANNOUNCEMENT_DRAFT_KEY = "silly-stitch-admin-announcement-draft";
 const ADMIN_PRODUCT_DRAFT_KEY = "silly-stitch-admin-product-draft";
-const ADMIN_PRODUCT_CATEGORY_LIBRARY_KEY = "silly-stitch-admin-product-category-library";
 
 const SORT_FIELDS = [
+  { value: "createdAt", label: "Date"     },
+  { value: "orderId",   label: "Order ID" },
   { value: "total",     label: "Total"    },
-  { value: "confirmedDeadline", label: "Deadline" },
 ];
+
+const PRODUCT_CATEGORY_OPTIONS = ["keychain", "plushie", "bracelet", "accessory", "custom"];
 
 // ─── Helpers ───────────────────────────────────
 
@@ -103,72 +104,6 @@ function formatDate(ts) {
     day: "numeric", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
-}
-
-function toMillis(value) {
-  if (!value) return 0;
-  if (typeof value?.toDate === "function") return value.toDate().getTime();
-
-  const parsed = new Date(value).getTime();
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-function normalizeCategory(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function normalizeCategoryList(values) {
-  const items = Array.isArray(values) ? values : [values];
-  const unique = new Set();
-
-  items.forEach((value) => {
-    const normalized = normalizeCategory(value);
-    if (normalized) unique.add(normalized);
-  });
-
-  return Array.from(unique);
-}
-
-function sortCategories(categories) {
-  return [...categories].sort((a, b) => a.localeCompare(b));
-}
-
-function formatCategoryLabel(category) {
-  return String(category || "").replaceAll("_", " ");
-}
-
-function getProductCategories(product) {
-  const fromArray = Array.isArray(product?.categories) ? product.categories : [];
-  const legacyCategory = product?.category ? [product.category] : [];
-  return normalizeCategoryList([...fromArray, ...legacyCategory]);
-}
-
-function readCategoryLibraryFromStorage(key) {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? normalizeCategoryList(parsed) : [];
-  } catch {
-    return [];
-  }
-}
-
-function createEmptyProductForm() {
-  return {
-    name: "",
-    categories: [],
-    price: "",
-    makingTimeHours: "",
-    description: "",
-    imageUrl: "",
-    images: "",
-  };
 }
 
 // ─── SVG Icons ─────────────────────────────────
@@ -299,7 +234,6 @@ function AnnouncementsPanel({
   onClose,
   announcements,
   announcementsLoading,
-  announcementError,
   announcementForm,
   setAnnouncementForm,
   handleSaveAnnouncement,
@@ -321,12 +255,6 @@ function AnnouncementsPanel({
             {announcements.length} item{announcements.length !== 1 ? "s" : ""}
           </span>
         </div>
-
-        {announcementError && (
-          <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 px-3 py-2.5 text-sm text-red-600 dark:text-red-300 mb-4">
-            {announcementError}
-          </div>
-        )}
 
         <form onSubmit={handleSaveAnnouncement} className="mb-6 rounded-xl border border-yarn/12 dark:border-[#3d2f5a] bg-cream dark:bg-[#1e1a30] p-4 space-y-3">
           <div className="flex items-center justify-between gap-2 mb-2">
@@ -380,12 +308,6 @@ function ProductsPanel({
   productError,
   productForm,
   setProductForm,
-  productCategories,
-  newCategoryInput,
-  setNewCategoryInput,
-  handleAddProductCategory,
-  handleDeleteProductCategory,
-  toggleProductCategory,
   handleSaveProduct,
   startEditProduct,
   handleDeleteProduct,
@@ -395,8 +317,6 @@ function ProductsPanel({
   resetProductForm,
   productDraftSavedAt,
 }) {
-  const selectedCategories = normalizeCategoryList(productForm.categories);
-
   if (!open) return null;
 
   return (
@@ -418,75 +338,6 @@ function ProductsPanel({
           {productDraftSavedAt ? `Saved ✓ ${formatDraftTime(productDraftSavedAt)}` : "Autosave active"}
         </p>
 
-        <div className="mb-4 rounded-xl border border-yarn/12 dark:border-[#3d2f5a] bg-cream/55 dark:bg-[#1e1a30] p-3 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-text dark:text-[#e0d4f0]">Categories</h3>
-            <span className="text-[11px] text-text/50 dark:text-[#9b82b0]">{productCategories.length} saved</span>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              value={newCategoryInput}
-              onChange={(e) => setNewCategoryInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAddProductCategory();
-                }
-              }}
-              placeholder="Add category (example: festival special)"
-              className="flex-1 rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-white/70 dark:bg-[#16122a] px-3 py-2 text-sm text-text dark:text-[#e0d4f0] placeholder:text-text/40 dark:placeholder:text-[#6a5878]"
-            />
-            <button
-              type="button"
-              onClick={handleAddProductCategory}
-              className="rounded-xl bg-yarn dark:bg-[#2a1f3d] text-white dark:text-[#e0d4f0] px-4 py-2 text-sm font-medium"
-            >
-              Add category
-            </button>
-          </div>
-
-          {productCategories.length === 0 ? (
-            <p className="text-xs text-text/45 dark:text-[#7a6490]">No categories yet. Add one to begin.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {productCategories.map((category) => {
-                const selected = selectedCategories.includes(category);
-                return (
-                  <div key={category} className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => toggleProductCategory(category)}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium inline-flex items-center gap-1.5 transition-colors
-                        ${selected
-                          ? "bg-pinky/70 dark:bg-[#3a1e35] border-pinky dark:border-[#6b2e55] text-[#5a2434] dark:text-[#f0aad0]"
-                          : "bg-white/70 dark:bg-[#16122a] border-yarn/20 dark:border-[#3d2f5a] text-text/70 dark:text-[#c0aad8]"
-                        }`}
-                    >
-                      {selected && <CheckIcon />}
-                      <span className="capitalize">{formatCategoryLabel(category)}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteProductCategory(category)}
-                      className="rounded-full border border-red-200 dark:border-red-800 px-2 py-0.5 text-[11px] font-medium text-red-600 dark:text-red-300"
-                      title="Delete category"
-                    >
-                      X
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <p className="text-[11px] text-text/50 dark:text-[#9b82b0]">
-            {selectedCategories.length
-              ? `Selected for this product: ${selectedCategories.map(formatCategoryLabel).join(", ")}`
-              : "Select one or more categories for this product."}
-          </p>
-        </div>
-
         <form onSubmit={handleSaveProduct} className="grid gap-3 sm:grid-cols-2 mb-4">
           <input
             value={productForm.name}
@@ -494,20 +345,22 @@ function ProductsPanel({
             placeholder="Product name"
             className="rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-sm text-text dark:text-[#e0d4f0] placeholder:text-text/40 dark:placeholder:text-[#6a5878]"
           />
+          <select
+            value={productForm.category}
+            onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))}
+            className="rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-sm text-text dark:text-[#e0d4f0]"
+          >
+            <option value="">Select category</option>
+            {PRODUCT_CATEGORY_OPTIONS.map((option) => (
+              <option key={option} value={option} className="capitalize">
+                {option}
+              </option>
+            ))}
+          </select>
           <input
             value={productForm.price}
             onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))}
             placeholder="Price"
-            inputMode="decimal"
-            className="rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-sm text-text dark:text-[#e0d4f0] placeholder:text-text/40 dark:placeholder:text-[#6a5878]"
-          />
-          <input
-            type="number"
-            min="0"
-            step="0.25"
-            value={productForm.makingTimeHours}
-            onChange={(e) => setProductForm((p) => ({ ...p, makingTimeHours: e.target.value }))}
-            placeholder="Making Time (hours) — how long this product takes to make"
             inputMode="decimal"
             className="rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-sm text-text dark:text-[#e0d4f0] placeholder:text-text/40 dark:placeholder:text-[#6a5878]"
           />
@@ -557,115 +410,30 @@ function ProductsPanel({
           <p className="text-sm text-text/45 dark:text-[#7a6490]">No products yet.</p>
         ) : (
           <div className="space-y-2">
-            {products.map((product) => {
-              const productCategoryTags = getProductCategories(product);
-
-              return (
-                <div key={product.docId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-yarn/12 dark:border-[#2a2040] bg-cream/50 dark:bg-[#1e1a30] px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-text dark:text-[#e0d4f0] truncate">{product.name}</p>
-                    <p className="text-xs text-yarn dark:text-[#c4a8cc]">Rs {Number(product.price) || 0}</p>
-                    <p className="text-[11px] capitalize text-text/45 dark:text-[#9b82b0]">
-                      {productCategoryTags.length
-                        ? productCategoryTags.map(formatCategoryLabel).join(", ")
-                        : "uncategorized"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => startEditProduct(product)}
-                      className="rounded-lg border border-yarn/20 dark:border-[#3d2f5a] px-2.5 py-1.5 text-xs text-text dark:text-[#c0aad8]"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteProduct(product.docId)}
-                      disabled={deletingProductId === product.docId}
-                      className="rounded-lg border border-red-200 dark:border-red-800 px-2.5 py-1.5 text-xs text-red-600 dark:text-red-300 disabled:opacity-60"
-                    >
-                      {deletingProductId === product.docId ? "Deleting..." : "Delete"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-    </SlidePanel>
-  );
-}
-
-function NotifsPanel({ open, onClose, orders }) {
-  const [copied, setCopied] = useState(false);
-
-  if (!open) return null;
-
-  const optedIn = orders
-    .filter((o) => o.wantsLaunchNotifications && o.email)
-    .reduce((acc, o) => {
-      const email = o.email.trim().toLowerCase();
-      if (!acc.find((e) => e.email === email)) {
-        acc.push({ email, name: o.customerName || "—" });
-      }
-      return acc;
-    }, []);
-
-  const emailString = optedIn.map((e) => e.email).join(", ");
-
-  function handleCopy() {
-    if (!emailString) return;
-    navigator.clipboard.writeText(emailString).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }
-
-  return (
-    <SlidePanel open={open} title="Launch Notifications" onClose={onClose}>
-      <section className="rounded-2xl border border-yarn/12 dark:border-[#2a2040] bg-[#FFFDF5] dark:bg-[#16122a] p-4 sm:p-5">
-
-        <p className="text-xs text-text/50 dark:text-[#7a6490] mb-4">
-          {optedIn.length} customer{optedIn.length !== 1 ? "s" : ""} opted in to product launch emails.
-          Copy all emails and paste into Gmail BCC.
-        </p>
-
-        {optedIn.length > 0 && (
-          <button
-            onClick={handleCopy}
-            className={`w-full rounded-xl py-2.5 text-sm font-semibold mb-4 transition
-              ${copied
-                ? "bg-green-100 dark:bg-green-950/60 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
-                : "bg-yarn dark:bg-[#2a1f3d] text-white dark:text-[#e0d4f0] hover:opacity-90"
-              }`}
-          >
-            {copied ? "✓ Copied to clipboard!" : `Copy all ${optedIn.length} emails`}
-          </button>
-        )}
-
-        {optedIn.length === 0 ? (
-          <p className="text-sm text-text/40 dark:text-[#5a4878] text-center py-8">
-            No opt-ins yet. They'll appear here once customers check the notification box at checkout.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {optedIn.map((entry, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between gap-3 rounded-xl border border-yarn/12 dark:border-[#2a2040] bg-cream/50 dark:bg-[#1e1a30] px-3 py-2.5"
-              >
+            {products.map((product) => (
+              <div key={product.docId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-yarn/12 dark:border-[#2a2040] bg-cream/50 dark:bg-[#1e1a30] px-3 py-2.5">
                 <div className="min-w-0">
-                  <p className="text-sm text-text dark:text-[#e0d4f0] truncate">{entry.email}</p>
-                  <p className="text-xs text-text/45 dark:text-[#7a6490] truncate">{entry.name}</p>
+                  <p className="text-sm font-semibold text-text dark:text-[#e0d4f0] truncate">{product.name}</p>
+                  <p className="text-xs text-yarn dark:text-[#c4a8cc]">Rs {Number(product.price) || 0}</p>
+                  <p className="text-[11px] capitalize text-text/45 dark:text-[#9b82b0]">{product.category || "uncategorized"}</p>
                 </div>
-                <button
-                  onClick={() => navigator.clipboard.writeText(entry.email)}
-                  className="shrink-0 text-xs text-yarn dark:text-[#c4a8cc] hover:underline"
-                >
-                  Copy
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => startEditProduct(product)}
+                    className="rounded-lg border border-yarn/20 dark:border-[#3d2f5a] px-2.5 py-1.5 text-xs text-text dark:text-[#c0aad8]"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteProduct(product.docId)}
+                    disabled={deletingProductId === product.docId}
+                    className="rounded-lg border border-red-200 dark:border-red-800 px-2.5 py-1.5 text-xs text-red-600 dark:text-red-300 disabled:opacity-60"
+                  >
+                    {deletingProductId === product.docId ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -681,37 +449,26 @@ export default function Admin() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const CAPACITY = 4;
-  const BUFFER_DAYS = 4;
-
   const [products, setProducts]       = useState([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productError, setProductError] = useState(null);
   const [editingProductId, setEditingProductId] = useState(null);
   const [savingProduct, setSavingProduct] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState(null);
-  const [productForm, setProductForm] = useState(() => {
-    const empty = createEmptyProductForm();
-    const draft = readDraftFromStorage(ADMIN_PRODUCT_DRAFT_KEY, empty);
-
-    return {
-      ...empty,
-      ...draft,
-      categories: normalizeCategoryList([
-        ...(Array.isArray(draft.categories) ? draft.categories : []),
-        draft.category,
-      ]),
-    };
-  });
-  const [productCategories, setProductCategories] = useState(() =>
-    sortCategories(readCategoryLibraryFromStorage(ADMIN_PRODUCT_CATEGORY_LIBRARY_KEY))
+  const [productForm, setProductForm] = useState(() =>
+    readDraftFromStorage(ADMIN_PRODUCT_DRAFT_KEY, {
+      name: "",
+      category: "",
+      price: "",
+      description: "",
+      imageUrl: "",
+      images: "",
+    })
   );
-  const [newCategoryInput, setNewCategoryInput] = useState("");
   const [productDraftSavedAt, setProductDraftSavedAt] = useState(() => readDraftSavedAt(ADMIN_PRODUCT_DRAFT_KEY));
 
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
-  const [announcementError, setAnnouncementError] = useState(null);
   const [editingAnnouncementId, setEditingAnnouncementId] = useState(null);
   const [savingAnnouncement, setSavingAnnouncement] = useState(false);
   const [deletingAnnouncementId, setDeletingAnnouncementId] = useState(null);
@@ -734,12 +491,11 @@ export default function Admin() {
   const [updatingId, setUpdatingId]   = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [toast, setToast]             = useState(null);
-  const [sortField, setSortField]     = useState(null);
-  const [sortDir, setSortDir]         = useState("asc");
+  const [sortField, setSortField]     = useState("createdAt");
+  const [sortDir, setSortDir]         = useState("desc");
 
   const [showAnnouncementsPanel, setShowAnnouncementsPanel] = useState(false);
   const [showProductsPanel, setShowProductsPanel] = useState(false);
-  const [showNotifsPanel, setShowNotifsPanel] = useState(false);
 
   const { darkMode, toggleDark } = useTheme();
 
@@ -785,34 +541,15 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (productCategories.length === 0) {
-      window.localStorage.removeItem(ADMIN_PRODUCT_CATEGORY_LIBRARY_KEY);
-      return;
-    }
-
-    window.localStorage.setItem(
-      ADMIN_PRODUCT_CATEGORY_LIBRARY_KEY,
-      JSON.stringify(productCategories)
-    );
-  }, [productCategories]);
-
-  useEffect(() => {
+    const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"));
     return onSnapshot(
-      collection(db, "announcements"),
+      q,
       (snap) => {
-        const docs = snap.docs
-          .map((d) => ({ docId: d.id, ...d.data() }))
-          .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
-
-        setAnnouncements(docs);
+        setAnnouncements(snap.docs.map((d) => ({ docId: d.id, ...d.data() })));
         setAnnouncementsLoading(false);
-        setAnnouncementError(null);
       },
       (err) => {
         console.error("Announcements error:", err);
-        setAnnouncementError("Could not load announcements. Check your Firestore rules.");
         setAnnouncementsLoading(false);
       }
     );
@@ -846,12 +583,10 @@ export default function Admin() {
     if (typeof window === "undefined") return undefined;
 
     const timeout = setTimeout(() => {
-      const selectedCategories = normalizeCategoryList(productForm.categories);
       const isEmpty =
         !productForm.name.trim() &&
-        selectedCategories.length === 0 &&
+        !String(productForm.category || "").trim() &&
         !productForm.price.trim() &&
-        !String(productForm.makingTimeHours || "").trim() &&
         !productForm.description.trim() &&
         !productForm.imageUrl.trim() &&
         !productForm.images.trim();
@@ -862,11 +597,7 @@ export default function Admin() {
         return;
       }
 
-      const payload = {
-        ...productForm,
-        categories: selectedCategories,
-        savedAt: Date.now(),
-      };
+      const payload = { ...productForm, savedAt: Date.now() };
       window.localStorage.setItem(ADMIN_PRODUCT_DRAFT_KEY, JSON.stringify(payload));
       setProductDraftSavedAt(payload.savedAt);
     }, 500);
@@ -877,7 +608,14 @@ export default function Admin() {
   const showToast = useCallback((msg, type = "success") => setToast({ msg, type }), []);
 
   function resetProductForm() {
-    setProductForm(createEmptyProductForm());
+    setProductForm({
+      name: "",
+      category: "",
+      price: "",
+      description: "",
+      imageUrl: "",
+      images: "",
+    });
     setEditingProductId(null);
   }
 
@@ -958,26 +696,11 @@ export default function Admin() {
   async function updateStatus(docId, newStatus) {
     setUpdatingId(docId + "_status");
     try {
-      const payload = { status: newStatus };
-
-      if (newStatus === "accepted") {
-        const order = orders.find((o) => o.docId === docId);
-        const activeOrders = orders.filter(
-          (o) =>
-            (o.status === "accepted" || o.status === "in_progress") &&
-            o.docId !== docId
-        );
-        const result = suggestDeadline(order, activeOrders, CAPACITY, BUFFER_DAYS);
-        payload.makingTime         = result.makingTime;
-        payload.confirmedDeadline  = result.suggestedDeadline;
-        payload.dailyAllocations   = result.dailyAllocations;
-      }
-
-      await updateDoc(doc(db, "orders", docId), payload);
+      await updateDoc(doc(db, "orders", docId), { status: newStatus });
       showToast("Status updated");
     } catch (err) {
       console.error(err);
-      showToast("Update failed — try again", "error");
+      showToast("Update failed � try again", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -990,76 +713,22 @@ export default function Admin() {
       showToast(current ? "WhatsApp confirmation removed" : "WhatsApp confirmed");
     } catch (err) {
       console.error(err);
-      showToast("Update failed - try again", "error");
+      showToast("Update failed � try again", "error");
     } finally {
       setUpdatingId(null);
     }
   }
 
   function startEditProduct(product) {
-    const categories = getProductCategories(product);
-
     setEditingProductId(product.docId);
     setProductForm({
       name: product.name || "",
-      categories,
+      category: String(product.category || "").trim().toLowerCase(),
       price: String(product.price ?? ""),
-      makingTimeHours: String(product.makingTimeHours ?? ""),
       description: product.description || "",
       imageUrl: product.imageUrl || "",
       images: Array.isArray(product.images) ? product.images.join(", ") : "",
     });
-
-    setProductCategories((prev) => sortCategories(normalizeCategoryList([...prev, ...categories])));
-  }
-
-  function toggleProductCategory(category) {
-    setProductForm((prev) => {
-      const current = normalizeCategoryList(prev.categories);
-      const hasCategory = current.includes(category);
-      const next = hasCategory
-        ? current.filter((item) => item !== category)
-        : [...current, category];
-
-      return {
-        ...prev,
-        categories: sortCategories(next),
-      };
-    });
-  }
-
-  function handleAddProductCategory() {
-    const normalized = normalizeCategory(newCategoryInput);
-
-    if (!normalized) {
-      showToast("Enter a valid category name", "error");
-      return;
-    }
-
-    const exists = productCategories.includes(normalized);
-    setProductCategories((prev) =>
-      exists ? prev : sortCategories(normalizeCategoryList([...prev, normalized]))
-    );
-
-    setProductForm((prev) => ({
-      ...prev,
-      categories: sortCategories(normalizeCategoryList([...(prev.categories || []), normalized])),
-    }));
-
-    setNewCategoryInput("");
-    showToast(exists ? "Category already exists and is now selected" : "Category added");
-  }
-
-  function handleDeleteProductCategory(category) {
-    const ok = window.confirm(`Delete category "${formatCategoryLabel(category)}" from this panel?`);
-    if (!ok) return;
-
-    setProductCategories((prev) => prev.filter((item) => item !== category));
-    setProductForm((prev) => ({
-      ...prev,
-      categories: normalizeCategoryList((prev.categories || []).filter((item) => item !== category)),
-    }));
-    showToast("Category removed");
   }
 
   async function handleSaveProduct(e) {
@@ -1067,13 +736,11 @@ export default function Admin() {
     if (savingProduct) return;
 
     const name = productForm.name.trim();
-    const categories = normalizeCategoryList(productForm.categories);
+    const category = String(productForm.category || "").trim().toLowerCase();
     const price = Number(productForm.price);
-    const parsedMakingTime = Number(productForm.makingTimeHours || 0);
-    const makingTimeHours = Number.isNaN(parsedMakingTime) || parsedMakingTime < 0 ? 0 : parsedMakingTime;
 
-    if (!name || Number.isNaN(price) || price < 0 || categories.length === 0) {
-      showToast("Name, valid price, and at least one category are required", "error");
+    if (!name || Number.isNaN(price) || price < 0 || !PRODUCT_CATEGORY_OPTIONS.includes(category)) {
+      showToast("Name, valid price, and category are required", "error");
       return;
     }
 
@@ -1084,10 +751,8 @@ export default function Admin() {
 
     const payload = {
       name,
-      category: categories[0] || "",
-      categories,
+      category,
       price,
-      makingTimeHours,
       description: productForm.description.trim(),
       imageUrl: productForm.imageUrl.trim(),
       images: parsedImages,
@@ -1128,19 +793,6 @@ export default function Admin() {
     }
   }
 
-  async function handleDeleteOrder(docId) {
-    const ok = window.confirm("Permanently delete this cancelled order?");
-    if (!ok) return;
-
-    try {
-      await deleteDoc(doc(db, "orders", docId));
-      showToast("Order deleted");
-    } catch (err) {
-      console.error(err);
-      showToast("Could not delete order", "error");
-    }
-  }
-
   function toggleExpanded(docId) {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -1151,7 +803,7 @@ export default function Admin() {
 
   function handleSortField(field) {
     if (sortField === field) {
-      setSortField(null);
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
       setSortDir("asc");
@@ -1174,26 +826,10 @@ export default function Admin() {
       return statusMatch && searchMatch;
     })
     .sort((a, b) => {
-      if (!sortField) {
-        if (filter === "pending") {
-          const aDate = a.createdAt?.toDate?.()?.getTime() ?? 0;
-          const bDate = b.createdAt?.toDate?.()?.getTime() ?? 0;
-
-          if (aDate < bDate) return -1;
-          if (aDate > bDate) return 1;
-        }
-
-        return 0;
-      }
-
       let aVal, bVal;
-      if (sortField === "confirmedDeadline") {
-        const aTime = a.confirmedDeadline?.toDate?.()?.getTime();
-        const bTime = b.confirmedDeadline?.toDate?.()?.getTime();
-
-        // Orders with no deadline should always sink to the bottom.
-        aVal = aTime ?? (sortDir === "asc" ? Infinity : -Infinity);
-        bVal = bTime ?? (sortDir === "asc" ? Infinity : -Infinity);
+      if (sortField === "createdAt") {
+        aVal = a.createdAt?.toDate?.()?.getTime() ?? 0;
+        bVal = b.createdAt?.toDate?.()?.getTime() ?? 0;
       } else if (sortField === "total") {
         aVal = getTotal(a);
         bVal = getTotal(b);
@@ -1309,13 +945,6 @@ export default function Admin() {
                 >
                   Products
                 </button>
-
-                <button
-                  onClick={() => setShowNotifsPanel(true)}
-                  className="w-full rounded-xl py-2.5 text-sm font-medium bg-cream dark:bg-[#1e1a30] border border-yarn/20 dark:border-[#3d2f5a] text-yarn dark:text-[#c4a8cc] hover:opacity-90 shadow-sm transition"
-                >
-                  Notification List
-                </button>
               </div>
 
               {/* Divider */}
@@ -1329,7 +958,7 @@ export default function Admin() {
                 </p>
 
                 {/* Field pills */}
-                <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+                <div className="grid grid-cols-3 gap-1.5 mb-1.5">
                   {SORT_FIELDS.map(({ value, label }) => {
                     const active = sortField === value;
                     return (
@@ -1362,12 +991,11 @@ export default function Admin() {
                     <button
                       key={dir}
                       onClick={() => setSortDir(dir)}
-                      disabled={!sortField}
                       className={`flex-1 rounded-xl py-1.5 text-xs font-medium border flex items-center justify-center gap-1 transition
                         ${sortDir === dir
                           ? "bg-pinky/70    dark:bg-[#3a1e35] border-pinky       dark:border-[#6b2e55] text-[#5a2434] dark:text-[#f0aad0]"
                           : "bg-cream/80   dark:bg-[#1e1a30] border-yarn/15     dark:border-[#2a2040] text-text/45  dark:text-[#5a4878] hover:border-yarn/30"
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        }`}
                     >
                       {dir === "asc" ? <ArrowUpIcon /> : <ArrowDownIcon />}
                       {label}
@@ -1497,8 +1125,8 @@ export default function Admin() {
                 bg-yarn/8    dark:bg-[#2a1f3d]
                 border border-yarn/18 dark:border-[#3d2f5a]
                 text-yarn    dark:text-[#c4a8cc]">
-                {sortField ? SORT_FIELDS.find((f) => f.value === sortField)?.label : "Default"}
-                {sortField && (sortDir === "asc" ? <ArrowUpIcon /> : <ArrowDownIcon />)}
+                {SORT_FIELDS.find((f) => f.value === sortField)?.label}
+                {sortDir === "asc" ? <ArrowUpIcon /> : <ArrowDownIcon />}
               </span>
             </div>
 
@@ -1535,22 +1163,6 @@ export default function Admin() {
                   const isExpanded = expandedIds.has(order.docId);
                   const isUpdating = updatingId?.startsWith(order.docId);
                   const total      = getTotal(order);
-                  const activeOrders = orders.filter(
-                    (o) =>
-                      (o.status === "accepted" || o.status === "in_progress") &&
-                      o.docId !== order.docId
-                  );
-                  const scheduleResult = suggestDeadline(order, activeOrders, CAPACITY, BUFFER_DAYS);
-                  const displayDeadline = order.confirmedDeadline
-                    ? order.confirmedDeadline.toDate
-                      ? order.confirmedDeadline.toDate()
-                      : new Date(order.confirmedDeadline)
-                    : scheduleResult.suggestedDeadline;
-                  const showDeadline = !["completed", "cancelled"].includes(order.status);
-                  const shouldShowConfirmedLabel =
-                    Boolean(order.confirmedDeadline) ||
-                    order.status === "accepted" ||
-                    order.status === "in_progress";
 
                   return (
                     <div
@@ -1581,16 +1193,6 @@ export default function Admin() {
                           <p className="text-xs text-text/38 dark:text-[#4a3868]">
                             {formatDate(order.createdAt)}
                           </p>
-                          {showDeadline && (
-                            <p className="text-xs font-medium text-yarn/70 dark:text-[#9b82b0]">
-                              {shouldShowConfirmedLabel ? "Deadline" : "Est. deadline"}:{" "}
-                              {displayDeadline.toLocaleDateString("en-IN", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </p>
-                          )}
                         </div>
 
                         <div className="flex items-center gap-2.5 shrink-0">
@@ -1679,24 +1281,6 @@ export default function Admin() {
                               {order.whatsappConfirmed && <CheckIcon />}
                               {order.whatsappConfirmed ? "WhatsApp confirmed" : "Mark WhatsApp confirmed"}
                             </button>
-
-                            {/* Delete — only for cancelled orders */}
-                            {order.status === "cancelled" && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteOrder(order.docId);
-                                }}
-                                className="rounded-xl border border-red-200 dark:border-red-800
-                                  bg-red-50 dark:bg-red-950/40
-                                  px-3 py-1.5 text-xs font-medium
-                                  text-red-600 dark:text-red-300
-                                  hover:bg-red-100 dark:hover:bg-red-900/60
-                                  transition"
-                              >
-                                Delete order
-                              </button>
-                            )}
                           </div>
                         </div>
                       )}
@@ -1714,7 +1298,6 @@ export default function Admin() {
         onClose={() => setShowAnnouncementsPanel(false)}
         announcements={announcements}
         announcementsLoading={announcementsLoading}
-        announcementError={announcementError}
         announcementForm={announcementForm}
         setAnnouncementForm={setAnnouncementForm}
         handleSaveAnnouncement={handleSaveAnnouncement}
@@ -1735,12 +1318,6 @@ export default function Admin() {
         productError={productError}
         productForm={productForm}
         setProductForm={setProductForm}
-        productCategories={productCategories}
-        newCategoryInput={newCategoryInput}
-        setNewCategoryInput={setNewCategoryInput}
-        handleAddProductCategory={handleAddProductCategory}
-        handleDeleteProductCategory={handleDeleteProductCategory}
-        toggleProductCategory={toggleProductCategory}
         handleSaveProduct={handleSaveProduct}
         startEditProduct={startEditProduct}
         handleDeleteProduct={handleDeleteProduct}
@@ -1749,12 +1326,6 @@ export default function Admin() {
         deletingProductId={deletingProductId}
         resetProductForm={resetProductForm}
         productDraftSavedAt={productDraftSavedAt}
-      />
-
-      <NotifsPanel
-        open={showNotifsPanel}
-        onClose={() => setShowNotifsPanel(false)}
-        orders={orders}
       />
 
     </div>

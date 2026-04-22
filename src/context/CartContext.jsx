@@ -4,14 +4,11 @@ const CartContext = createContext();
 
 function normalizeProduct(product) {
   const image = product.imageUrl || (product.images && product.images[0]) || "/placeholder.webp";
-  const rawMakingTime = Number(product.makingTimeHours);
-  const makingTimeHours = Number.isFinite(rawMakingTime) && rawMakingTime >= 0 ? rawMakingTime : 0;
 
   return {
     id: product.id,
     name: product.name,
     price: Number(product.price) || 0,
-    makingTimeHours,
     image,
     quantity: 1,
   };
@@ -39,14 +36,7 @@ export function CartProvider({ children }) {
       if (existing) {
         return prev.map((item) =>
           item.id === normalized.id
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-                makingTimeHours:
-                  typeof item.makingTimeHours === "number"
-                    ? item.makingTimeHours
-                    : normalized.makingTimeHours,
-              }
+            ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }

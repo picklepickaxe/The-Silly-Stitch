@@ -8,7 +8,6 @@ import { Link } from "react-router-dom";
 const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || "8799741646";
 const CART_CHECKOUT_DRAFT_KEY = "silly-stitch-cart-checkout-draft";
 const ORDER_POLICY_ACCEPTED_KEY = "silly-stitch-order-policy-accepted";
-const ORDER_LAUNCH_NOTIFICATION_PREFERENCE_KEY = "silly-stitch-launch-notification-opt-in";
 
 function readFromStorage(key, fallback = null) {
   if (typeof window === "undefined") return fallback;
@@ -53,21 +52,8 @@ export default function Cart() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [error, setError] = useState("");
   const [showPolicyModal, setShowPolicyModal] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [confirmReadHowTo, setConfirmReadHowTo] = useState(false);
   const [confirmReadPolicy, setConfirmReadPolicy] = useState(false);
-  const [wantsLaunchNotifications, setWantsLaunchNotifications] = useState(() => {
-    if (typeof window === "undefined") return Boolean(checkoutDraft.wantsLaunchNotifications);
-    const storedPreference = window.localStorage.getItem(ORDER_LAUNCH_NOTIFICATION_PREFERENCE_KEY);
-    if (storedPreference === "true") return true;
-    if (storedPreference === "false") return false;
-    return Boolean(checkoutDraft.wantsLaunchNotifications);
-  });
-  const [hasSavedLaunchPreference, setHasSavedLaunchPreference] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const storedPreference = window.localStorage.getItem(ORDER_LAUNCH_NOTIFICATION_PREFERENCE_KEY);
-    return storedPreference === "true" || storedPreference === "false";
-  });
   const [hasAcceptedOrderPolicy, setHasAcceptedOrderPolicy] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(ORDER_POLICY_ACCEPTED_KEY) === "true";
@@ -100,7 +86,6 @@ export default function Cart() {
         customerName,
         email,
         phone,
-        wantsLaunchNotifications,
         cartSnapshot: cartItems.map((item) => ({ id: item.id, quantity: item.quantity })),
         savedAt: Date.now(),
       };
@@ -110,7 +95,7 @@ export default function Cart() {
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [customerName, email, phone, wantsLaunchNotifications, cartItems]);
+  }, [customerName, email, phone, cartItems]);
 
   function closePolicyModal() {
     setShowPolicyModal(false);
@@ -131,7 +116,6 @@ export default function Cart() {
         name: item.name,
         price: Number(item.price) || 0,
         quantity: item.quantity,
-        makingTimeHours: Number(item.makingTimeHours) || 0,
       }));
 
       const total = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -141,7 +125,6 @@ export default function Cart() {
         customerName: customerName.trim(),
         email: email.trim(),
         phone: phone.trim(),
-        wantsLaunchNotifications,
         items: orderItems,
         total,
         status: "pending",
@@ -187,6 +170,11 @@ export default function Cart() {
     if (!cartItems.length || !isFormValid || placingOrder) return;
 
     setError("");
+    if (hasAcceptedOrderPolicy) {
+      void submitOrderToWhatsapp();
+      return;
+    }
+
     setShowPolicyModal(true);
   }
 
@@ -195,13 +183,8 @@ export default function Cart() {
 
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ORDER_POLICY_ACCEPTED_KEY, "true");
-      window.localStorage.setItem(
-        ORDER_LAUNCH_NOTIFICATION_PREFERENCE_KEY,
-        wantsLaunchNotifications ? "true" : "false"
-      );
     }
     setHasAcceptedOrderPolicy(true);
-    setHasSavedLaunchPreference(true);
     closePolicyModal();
     await submitOrderToWhatsapp();
   }
@@ -257,6 +240,8 @@ export default function Cart() {
                 <img
                   src={item.image}
                   alt={item.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-20 h-20 rounded-xl object-cover bg-gray-100 flex-shrink-0"
                 />
 
@@ -304,7 +289,7 @@ export default function Cart() {
             <div className="pt-1 text-right">
               <button
                 type="button"
-                onClick={() => setShowClearConfirm(true)}
+                onClick={clearCart}
                 className="text-xs text-red-500 hover:underline transition"
               >
                 Clear your cart
@@ -403,9 +388,11 @@ export default function Cart() {
                 You'll be redirected to WhatsApp to confirm
               </p>
 
-              <p className="mt-1 text-center text-[11px] text-text/55 dark:text-[#9b82b0]">
-                Policy confirmation is required before placing each order.
-              </p>
+              {!hasAcceptedOrderPolicy && (
+                <p className="mt-1 text-center text-[11px] text-text/55 dark:text-[#9b82b0]">
+                  First order requires one-time policy confirmation.
+                </p>
+              )}
             </div>
           </aside>
 
@@ -432,9 +419,7 @@ export default function Cart() {
                   onChange={(e) => setConfirmReadHowTo(e.target.checked)}
                   className="mt-0.5 accent-yarn"
                 />
-                <span>
-                  I have read How to Place Your Order <span className="text-red-500">*</span>
-                </span>
+                <span>I have read How to Place Your Order</span>
               </label>
 
               <label className="flex items-start gap-2.5 text-sm text-text dark:text-[#d4c6ea]">
@@ -444,19 +429,7 @@ export default function Cart() {
                   onChange={(e) => setConfirmReadPolicy(e.target.checked)}
                   className="mt-0.5 accent-yarn"
                 />
-                <span>
-                  I have read Return & Cancellation Policy <span className="text-red-500">*</span>
-                </span>
-              </label>
-
-              <label className="flex items-start gap-2.5 text-sm text-text dark:text-[#d4c6ea]">
-                <input
-                  type="checkbox"
-                  checked={wantsLaunchNotifications}
-                  onChange={(e) => setWantsLaunchNotifications(e.target.checked)}
-                  className="mt-0.5 accent-yarn"
-                />
-                <span>I want to receive new product launch notifications on my provided email.</span>
+                <span>I have read Return & Cancellation Policy</span>
               </label>
             </div>
 
@@ -475,41 +448,6 @@ export default function Cart() {
                 className="rounded-lg bg-yarn dark:bg-[#2a1f3d] text-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
               >
                 Yes, I understand
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showClearConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={() => setShowClearConfirm(false)} />
-
-          <div className="relative w-full max-w-md rounded-2xl border border-yarn/20 bg-[#FFFDF7] dark:bg-[#16122a] dark:border-[#3d2f5a] p-5 shadow-xl">
-            <h3 className="text-lg font-semibold text-text dark:text-[#e0d4f0] mb-2">
-              Clear your cart?
-            </h3>
-            <p className="text-xs text-text/60 dark:text-[#a78dbd] mb-4">
-              This will remove all {totalItems} {totalItems === 1 ? "item" : "items"} from your cart. This can't be undone.
-            </p>
-
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setShowClearConfirm(false)}
-                className="rounded-lg border border-yarn/20 dark:border-[#4a3560] px-3 py-2 text-sm text-text dark:text-[#c0aad8]"
-              >
-                No, keep it
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  clearCart();
-                  setShowClearConfirm(false);
-                }}
-                className="rounded-lg bg-red-500 text-white px-3 py-2 text-sm font-semibold hover:opacity-90 transition"
-              >
-                Yes, clear cart
               </button>
             </div>
           </div>
