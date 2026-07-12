@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+//import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import PageContainer from "../components/PageContainer";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -35,11 +35,11 @@ function normalizeWhatsappNumber(value) {
   return digits;
 }
 
-function generateOrderId() {
+/*function generateOrderId() {
   const now = Date.now();
   const random = Math.floor(Math.random() * 900 + 100);
   return `ORD-${now}-${random}`;
-}
+}*/
 
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart, clearCart, totalPrice, totalItems } = useCart();
@@ -112,40 +112,42 @@ export default function Cart() {
     setPlacingOrder(true);
 
     try {
-      const orderId = generateOrderId();
-      const orderItems = cartItems.map((item) => ({
-        productId: item.id,
-        name: item.name,
-        price: Number(item.price) || 0,
-        quantity: item.quantity,
-      }));
+      const idToken = await user.getIdToken();
 
-      const total = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const response = await fetch("https://the-silly-stitch.onrender.com/placeOrder", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          items: cartItems.map((item) => ({
+            productId: item.id,
+            quantity: item.quantity,
+          })),
+          customerName: customerName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+        }),
+      });
 
-      const orderPayload = {
-        orderId,
-        userId: user.uid,
-        customerName: customerName.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        items: orderItems,
-        total,
-        status: "pending",
-        whatsappConfirmed: false,
-        createdAt: serverTimestamp(),
-      };
+      const result = await response.json();
 
-      await addDoc(collection(db, "orders"), orderPayload);
+      if (!response.ok) {
+        throw new Error(result.error || "Could not place order.");
+      }
 
-      const itemLines = orderItems
+      const { orderId, items: resolvedItems, total, customerName: name, email: mail, phone: ph } = result;
+
+      const itemLines = resolvedItems
         .map((item) => `${item.name} x ${item.quantity} = Rs ${item.price * item.quantity}`)
         .join("\n");
 
       const message = [
         `Hi, I want to confirm my order ${orderId}`,
-        `Name: ${orderPayload.customerName}`,
-        `Email: ${orderPayload.email}`,
-        `Phone: ${orderPayload.phone}`,
+        `Name: ${name}`,
+        `Email: ${mail}`,
+        `Phone: ${ph}`,
         "Items:",
         itemLines,
         `Total: Rs ${total}`,
@@ -162,8 +164,9 @@ export default function Cart() {
 
       const whatsappTarget = normalizeWhatsappNumber(WHATSAPP_NUMBER);
       window.location.href = `https://wa.me/${whatsappTarget}?text=${encodeURIComponent(message)}`;
-    } catch {
-      setError("Could not place order. Please try again.");
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Could not place order. Please try again.");
     } finally {
       setPlacingOrder(false);
     }
