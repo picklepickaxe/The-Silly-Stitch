@@ -1,21 +1,66 @@
-// src/Pages/Account.jsx  (new)
+// src/Pages/Account.jsx
 import { useEffect, useState } from "react";
-import { collection, query, where, orderBy, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
 import PageContainer from "../components/PageContainer";
 import { useAuth } from "../context/AuthContext";
 import { db } from "../firebase/Config";
 
+const STATUS_STYLES = {
+  pending:     { text: "text-amber-700  dark:text-amber-300",  dot: "bg-amber-400"  },
+  accepted:    { text: "text-blue-700   dark:text-blue-300",   dot: "bg-blue-400"   },
+  in_progress: { text: "text-purple-700 dark:text-purple-300", dot: "bg-purple-400" },
+  completed:   { text: "text-green-700  dark:text-green-300",  dot: "bg-green-400"  },
+  cancelled:   { text: "text-red-500    dark:text-red-300",    dot: "bg-red-400"    },
+};
+
+function StatusChip({ status }) {
+  const s = STATUS_STYLES[status] || STATUS_STYLES.pending;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium">
+      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+      <span className={`capitalize ${s.text}`}>{String(status || "pending").replaceAll("_", " ")}</span>
+    </span>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function BagIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+      <path d="M3 6h18" />
+      <path d="M16 10a4 4 0 0 1-8 0" />
+    </svg>
+  );
+}
+
+function formatDate(ts) {
+  if (!ts) return "";
+  const date = ts.toDate ? ts.toDate() : new Date(ts);
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function Account() {
-  const { user, profile, refreshProfile, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState(profile?.name || "");
   const [copySuccess, setCopySuccess] = useState(false);
-
-  useEffect(() => {
-    setNameInput(profile?.name || "");
-  }, [profile]);
 
   useEffect(() => {
     async function loadOrders() {
@@ -34,13 +79,6 @@ export default function Account() {
     loadOrders();
   }, [user]);
 
-  async function saveName() {
-    if (!user || !nameInput.trim()) return;
-    await updateDoc(doc(db, "users", user.uid), { name: nameInput.trim() });
-    await refreshProfile();
-    setEditingName(false);
-  }
-
   function copyReferralCode() {
     if (!profile?.referralCode) return;
     navigator.clipboard.writeText(profile.referralCode);
@@ -48,84 +86,126 @@ export default function Account() {
     setTimeout(() => setCopySuccess(false), 1500);
   }
 
+  const initial = (profile?.name || user?.email || "?").trim().charAt(0).toUpperCase();
+  const referralsToGo = Math.max(0, 3 - (profile?.successfulReferralCount || 0));
+
   return (
-    <PageContainer>
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-[#e0d4f0] mb-8">Your Account</h1>
+    <PageContainer variant="tight">
+      <div className="max-w-2xl mx-auto pb-16">
+        <h1 className="text-4xl font-poiret text-text dark:text-[#e0d4f0] mb-6">
+          Account
+        </h1>
 
-        <div className="bg-white dark:bg-[#16122a] rounded-2xl shadow-sm border border-gray-100 dark:border-[#2a2040] p-6 mb-6">
-          <h2 className="font-semibold text-gray-900 dark:text-[#e0d4f0] mb-4">Profile</h2>
-
-          <div className="space-y-3 text-sm">
-            <div>
-              <span className="text-gray-400 dark:text-[#6a5878]">Name: </span>
-              {editingName ? (
-                <span className="inline-flex items-center gap-2">
-                  <input
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    className="rounded-lg border border-gray-200 dark:border-[#3a3050] bg-white dark:bg-[#1e1a30] px-2 py-1 text-sm"
-                  />
-                  <button onClick={saveName} className="text-yarn text-xs font-medium">Save</button>
-                  <button onClick={() => setEditingName(false)} className="text-gray-400 text-xs">Cancel</button>
-                </span>
-              ) : (
-                <span className="text-gray-800 dark:text-[#c0aad8] font-medium">
-                  {profile?.name || "—"}{" "}
-                  <button onClick={() => setEditingName(true)} className="text-yarn text-xs ml-1 hover:underline">
-                    edit
-                  </button>
-                </span>
-              )}
+        {/* ── Profile card ── */}
+        <div className="rounded-[32px] border border-yarn/12 dark:border-[#2a2040] bg-[#FFFDF5] dark:bg-[#16122a] shadow-[0_2px_20px_rgba(107,78,113,0.06)] dark:shadow-none p-6 sm:p-7 mb-5">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 shrink-0 rounded-full bg-pinky dark:bg-[#3a1e35] text-[#5a2434] dark:text-[#f0aad0] flex items-center justify-center text-xl font-poiret font-bold ring-4 ring-pinky/25 dark:ring-[#3a1e35]/50">
+              {initial}
             </div>
-
-            <div>
-              <span className="text-gray-400 dark:text-[#6a5878]">Email: </span>
-              <span className="text-gray-800 dark:text-[#c0aad8] font-medium">{user?.email}</span>
-            </div>
-
-            <div>
-              <span className="text-gray-400 dark:text-[#6a5878]">Your referral code: </span>
-              <span className="text-gray-800 dark:text-[#c0aad8] font-mono font-semibold">
-                {profile?.referralCode || "generating..."}
-              </span>
-              {profile?.referralCode && (
-                <button onClick={copyReferralCode} className="text-yarn text-xs ml-2 hover:underline">
-                  {copySuccess ? "copied!" : "copy"}
-                </button>
-              )}
-            </div>
-
-            <div>
-              <span className="text-gray-400 dark:text-[#6a5878]">Successful referrals: </span>
-              <span className="text-gray-800 dark:text-[#c0aad8] font-medium">{profile?.successfulReferralCount || 0}</span>
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-text dark:text-[#e0d4f0] truncate">
+                {profile?.name || "Welcome back"}
+              </p>
+              <p className="text-xs text-text/45 dark:text-[#7a6490] truncate">{user?.email}</p>
             </div>
           </div>
 
-          <button onClick={logout} className="mt-5 text-xs text-red-500 hover:underline">
+          <div className="h-px bg-yarn/10 dark:bg-[#2a2040] my-5" />
+
+          {/* Referral code chip */}
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-cream/70 dark:bg-[#1e1a30] border border-yarn/12 dark:border-[#2a2040] px-4 py-3 mb-3">
+            <div className="min-w-0">
+              <p className="text-[10px] tracking-[0.16em] uppercase font-semibold text-yarn/50 dark:text-[#6a5878] mb-1">
+                Your referral code
+              </p>
+              <p className="font-mono text-lg font-bold text-yarn dark:text-[#d4b8e0] tracking-wide">
+                {profile?.referralCode || "generating…"}
+              </p>
+            </div>
+            {profile?.referralCode && (
+              <button
+                onClick={copyReferralCode}
+                className={`shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition
+                  ${copySuccess
+                    ? "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300"
+                    : "bg-yarn dark:bg-[#3a2e50] text-white hover:opacity-90"
+                  }`}
+              >
+                {copySuccess ? <CheckIcon /> : <CopyIcon />}
+                {copySuccess ? "Copied" : "Copy"}
+              </button>
+            )}
+          </div>
+
+          {/* Referral progress */}
+          <div className="rounded-2xl bg-cream/70 dark:bg-[#1e1a30] border border-yarn/12 dark:border-[#2a2040] px-4 py-3.5">
+            <div className="flex items-baseline justify-between mb-2">
+              <p className="text-[10px] tracking-[0.16em] uppercase font-semibold text-yarn/50 dark:text-[#6a5878]">
+                Successful referrals
+              </p>
+              <p className="text-sm font-bold text-text dark:text-[#e0d4f0]">
+                {profile?.successfulReferralCount || 0}<span className="text-text/35 dark:text-[#5a4878] font-medium"> / 3</span>
+              </p>
+            </div>
+            <div className="h-2.5 rounded-full bg-yarn/15 dark:bg-[#0f0d1a] border border-yarn/10 dark:border-[#2a2040] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-pinky to-yarn dark:from-[#f0aad0] dark:to-[#8a5cae] transition-all duration-500 min-w-[10px]"
+                style={{ width: `${Math.min(100, ((profile?.successfulReferralCount || 0) / 3) * 100)}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-text/45 dark:text-[#7a6490] mt-2">
+              {referralsToGo === 0
+                ? "You've unlocked your 30% off reward 🎉"
+                : `${referralsToGo} more successful referral${referralsToGo === 1 ? "" : "s"} for 30% off`}
+            </p>
+          </div>
+
+          <button
+            onClick={logout}
+            className="mt-5 text-xs font-medium text-red-500 dark:text-red-400 hover:underline"
+          >
             Log out
           </button>
         </div>
 
-        <div className="bg-white dark:bg-[#16122a] rounded-2xl shadow-sm border border-gray-100 dark:border-[#2a2040] p-6">
-          <h2 className="font-semibold text-gray-900 dark:text-[#e0d4f0] mb-4">Order History</h2>
+        {/* ── Order history card ── */}
+        <div className="rounded-[32px] border border-yarn/12 dark:border-[#2a2040] bg-[#FFFDF5] dark:bg-[#16122a] shadow-[0_2px_20px_rgba(107,78,113,0.06)] dark:shadow-none p-6 sm:p-7">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold tracking-wide text-text dark:text-[#e0d4f0] flex items-center gap-2">
+              <BagIcon /> Order history
+            </h2>
+            <span className="text-xs text-text/35 dark:text-[#5a4878]">
+              {orders.length} order{orders.length !== 1 ? "s" : ""}
+            </span>
+          </div>
 
           {loadingOrders ? (
-            <p className="text-sm text-gray-400">Loading...</p>
+            <div className="flex items-center justify-center py-10 gap-2.5 text-text/38 dark:text-[#4a3868] text-xs">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-yarn/18 dark:border-[#3d2f5a] border-t-yarn dark:border-t-[#c4a8cc] animate-spin" />
+              Loading orders…
+            </div>
           ) : orders.length === 0 ? (
-            <p className="text-sm text-gray-400">No orders yet.</p>
+            <div className="rounded-2xl bg-cream/60 dark:bg-[#1e1a30] border border-yarn/10 dark:border-[#2a2040] py-10 text-center">
+              <p className="text-sm text-text/45 dark:text-[#7a6490]">No orders yet</p>
+              <p className="text-xs text-text/30 dark:text-[#4a3868] mt-1">Your first order will show up here</p>
+            </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {orders.map((order) => (
-                <div key={order.id} className="border border-gray-100 dark:border-[#2a2040] rounded-xl p-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium text-gray-800 dark:text-[#c0aad8]">{order.orderId}</span>
-                    <span className="text-yarn font-semibold">Rs {order.total}</span>
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-cream/50 dark:bg-[#1e1a30] border border-yarn/10 dark:border-[#2a2040] px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-text dark:text-[#e0d4f0]">#{order.orderId}</p>
+                      <StatusChip status={order.status} />
+                    </div>
+                    <p className="text-[11px] text-text/40 dark:text-[#5a4878] mt-0.5">
+                      {formatDate(order.createdAt)} • {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? "s" : ""}
+                    </p>
                   </div>
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span className="capitalize">{order.status}</span>
-                    <span>{order.items?.length || 0} items</span>
-                  </div>
+                  <p className="shrink-0 text-sm font-bold text-yarn dark:text-[#d4b8e0]">Rs {order.total}</p>
                 </div>
               ))}
             </div>

@@ -183,9 +183,9 @@ export default function Navbar() {
                 <Link
                   to="/account"
                   onClick={() => setOpen(false)}
-                  className="hover:text-gray-900 dark:hover:text-white"
+                  className="w-fit px-4 py-2 rounded-full bg-yarn dark:bg-[#2a1f3d] text-white text-xs font-semibold tracking-wide hover:bg-yarn/90 dark:hover:bg-[#3a2e50] active:scale-[0.98] transition-all"
                 >
-                  {(profile?.name || user?.email || "?").charAt(0).toUpperCase()}
+                  Account
                 </Link>
               ) : (
                 <button
