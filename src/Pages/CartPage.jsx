@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-//import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import PageContainer from "../components/PageContainer";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { db } from "../firebase/Config";
 import { Link } from "react-router-dom";
 
 const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || "8799741646";
@@ -35,19 +33,16 @@ function normalizeWhatsappNumber(value) {
   return digits;
 }
 
-/*function generateOrderId() {
-  const now = Date.now();
-  const random = Math.floor(Math.random() * 900 + 100);
-  return `ORD-${now}-${random}`;
-}*/
-
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart, clearCart, totalPrice, totalItems } = useCart();
-  const { isLoggedIn, openAuthModal, user } = useAuth();
-  const [checkoutDraft] = useState(() => readFromStorage(CART_CHECKOUT_DRAFT_KEY, {}));
+  const { isLoggedIn, openAuthModal, user, profile } = useAuth();
 
-  const [customerName, setCustomerName] = useState(checkoutDraft.customerName || "");
-  const [email, setEmail] = useState(checkoutDraft.email || "");
+  // Name and email now come from the account, not typed in here.
+  const accountName = profile?.name?.trim() || user?.displayName?.trim() || "";
+  const accountEmail = user?.email?.trim() || "";
+
+  // Only phone still needs to be typed — it's not stored on the account yet.
+  const [checkoutDraft] = useState(() => readFromStorage(CART_CHECKOUT_DRAFT_KEY, {}));
   const [phone, setPhone] = useState(checkoutDraft.phone || "");
   const [checkoutSavedAt, setCheckoutSavedAt] = useState(checkoutDraft.savedAt || null);
 
@@ -62,21 +57,15 @@ export default function Cart() {
   });
 
   const isFormValid = useMemo(() => {
-    const emailValue = email.trim();
-    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue);
-
-    return customerName.trim().length > 1 && /^\d{10}$/.test(phone.trim()) && isEmailValid;
-  }, [customerName, phone, email]);
+    if (!isLoggedIn) return true; // phone alone is enough pre-login; login gate happens on click
+    return Boolean(accountName) && Boolean(accountEmail) && /^\d{10}$/.test(phone.trim());
+  }, [isLoggedIn, accountName, accountEmail, phone]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
     const timeout = setTimeout(() => {
-      const hasDraftContent =
-        customerName.trim().length > 0 ||
-        email.trim().length > 0 ||
-        phone.trim().length > 0 ||
-        cartItems.length > 0;
+      const hasDraftContent = phone.trim().length > 0 || cartItems.length > 0;
 
       if (!hasDraftContent) {
         window.localStorage.removeItem(CART_CHECKOUT_DRAFT_KEY);
@@ -85,8 +74,6 @@ export default function Cart() {
       }
 
       const payload = {
-        customerName,
-        email,
         phone,
         cartSnapshot: cartItems.map((item) => ({ id: item.id, quantity: item.quantity })),
         savedAt: Date.now(),
@@ -97,7 +84,7 @@ export default function Cart() {
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [customerName, email, phone, cartItems]);
+  }, [phone, cartItems]);
 
   function closePolicyModal() {
     setShowPolicyModal(false);
@@ -125,8 +112,8 @@ export default function Cart() {
             productId: item.id,
             quantity: item.quantity,
           })),
-          customerName: customerName.trim(),
-          email: email.trim(),
+          customerName: accountName,
+          email: accountEmail,
           phone: phone.trim(),
         }),
       });
@@ -154,8 +141,6 @@ export default function Cart() {
       ].join("\n");
 
       clearCart();
-      setCustomerName("");
-      setEmail("");
       setPhone("");
       setCheckoutSavedAt(null);
       if (typeof window !== "undefined") {
@@ -173,12 +158,14 @@ export default function Cart() {
   }
 
   function handleOrderNow() {
-    if (!cartItems.length || !isFormValid || placingOrder) return;
+    if (!cartItems.length || placingOrder) return;
 
     if (!isLoggedIn) {
       openAuthModal({ mode: "login", onSuccess: () => handleOrderNow() });
       return;
     }
+
+    if (!isFormValid) return;
 
     setError("");
     if (hasAcceptedOrderPolicy) {
@@ -332,49 +319,55 @@ export default function Cart() {
             <div className="p-5">
               <h2 className="font-semibold text-gray-900 dark:text-[#e0d4f0] mb-4">Your Details</h2>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 dark:text-[#9b82b0] uppercase tracking-wide">
-                    Name
-                  </label>
-                  <input
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-gray-200 dark:border-[#3a3050] bg-white dark:bg-[#1e1a30] px-3.5 py-2.5 text-sm text-gray-900 dark:text-[#e0d4f0] placeholder-gray-300 dark:placeholder-[#4a3868] focus:outline-none focus:ring-2 focus:ring-yarn/40 focus:border-yarn transition"
-                    placeholder="Your name"
-                  />
-                </div>
+              {isLoggedIn ? (
+                <div className="space-y-4">
+                  {/* Read-only account info */}
+                  <div className="rounded-xl bg-cream/60 dark:bg-[#1e1a30] border border-gray-100 dark:border-[#2a2040] px-3.5 py-3">
+                    <p className="text-xs font-medium text-gray-500 dark:text-[#9b82b0] uppercase tracking-wide mb-1.5">
+                      Ordering as
+                    </p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-[#e0d4f0]">
+                      {accountName || "—"}
+                    </p>
+                    <p className="text-xs text-gray-400 dark:text-[#7a6490] mt-0.5">
+                      {accountEmail || "—"}
+                    </p>
+                  </div>
 
-                <div>
-                  <label className="text-xs font-medium text-gray-500 dark:text-[#9b82b0] uppercase tracking-wide">
-                    WhatsApp Number
-                  </label>
-                  <input
-                    value={phone}
-                    onChange={(e) => {
-                      const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
-                      setPhone(digitsOnly);
-                    }}
-                    className="mt-1.5 w-full rounded-xl border border-gray-200 dark:border-[#3a3050] bg-white dark:bg-[#1e1a30] px-3.5 py-2.5 text-sm text-gray-900 dark:text-[#e0d4f0] placeholder-gray-300 dark:placeholder-[#4a3868] focus:outline-none focus:ring-2 focus:ring-yarn/40 focus:border-yarn transition"
-                    placeholder="10-digit number"
-                    inputMode="numeric"
-                    maxLength={10}
-                  />
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 dark:text-[#9b82b0] uppercase tracking-wide">
+                      WhatsApp Number
+                    </label>
+                    <input
+                      value={phone}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+                        setPhone(digitsOnly);
+                      }}
+                      className="mt-1.5 w-full rounded-xl border border-gray-200 dark:border-[#3a3050] bg-white dark:bg-[#1e1a30] px-3.5 py-2.5 text-sm text-gray-900 dark:text-[#e0d4f0] placeholder-gray-300 dark:placeholder-[#4a3868] focus:outline-none focus:ring-2 focus:ring-yarn/40 focus:border-yarn transition"
+                      placeholder="10-digit number"
+                      inputMode="numeric"
+                      maxLength={10}
+                    />
+                    <p className="mt-1.5 text-[11px] text-gray-400 dark:text-[#6a5878]">
+                      Used only for this order, not saved to your account.
+                    </p>
+                  </div>
                 </div>
-
-                <div>
-                  <label className="text-xs font-medium text-gray-500 dark:text-[#9b82b0] uppercase tracking-wide">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-gray-200 dark:border-[#3a3050] bg-white dark:bg-[#1e1a30] px-3.5 py-2.5 text-sm text-gray-900 dark:text-[#e0d4f0] placeholder-gray-300 dark:placeholder-[#4a3868] focus:outline-none focus:ring-2 focus:ring-yarn/40 focus:border-yarn transition"
-                    placeholder="you@example.com"
-                  />
+              ) : (
+                <div className="rounded-xl bg-cream/60 dark:bg-[#1e1a30] border border-gray-100 dark:border-[#2a2040] px-3.5 py-4 text-center">
+                  <p className="text-sm text-gray-600 dark:text-[#c0aad8]">
+                    Log in to check out — we'll fill in your name and email automatically.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => openAuthModal({ mode: "login", onSuccess: () => handleOrderNow() })}
+                    className="mt-3 text-sm font-semibold text-yarn hover:underline"
+                  >
+                    Log in
+                  </button>
                 </div>
-              </div>
+              )}
 
               {error && (
                 <p className="mt-3 text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">
@@ -385,21 +378,23 @@ export default function Cart() {
               <button
                 type="button"
                 onClick={handleOrderNow}
-                disabled={!isFormValid || placingOrder}
+                disabled={(isLoggedIn && !isFormValid) || placingOrder}
                 className="mt-5 w-full bg-yarn text-white py-3 rounded-xl text-sm font-semibold tracking-wide disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] transition-all"
               >
                 {placingOrder ? "Placing order..." : "Order on WhatsApp →"}
               </button>
 
-              <p className="mt-2 text-center text-[11px] text-gray-400 dark:text-[#7a6490]">
-                {checkoutSavedAt ? `Saved ✓ ${formatSavedTime(checkoutSavedAt)}` : "Autosave active"}
-              </p>
+              {isLoggedIn && (
+                <p className="mt-2 text-center text-[11px] text-gray-400 dark:text-[#7a6490]">
+                  {checkoutSavedAt ? `Saved ✓ ${formatSavedTime(checkoutSavedAt)}` : "Autosave active"}
+                </p>
+              )}
 
               <p className="mt-3 text-center text-xs text-gray-300">
                 You'll be redirected to WhatsApp to confirm
               </p>
 
-              {!hasAcceptedOrderPolicy && (
+              {isLoggedIn && !hasAcceptedOrderPolicy && (
                 <p className="mt-1 text-center text-[11px] text-text/55 dark:text-[#9b82b0]">
                   First order requires one-time policy confirmation.
                 </p>

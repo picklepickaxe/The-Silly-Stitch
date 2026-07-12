@@ -9,7 +9,6 @@ export default function AuthModal() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [referralInput, setReferralInput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -23,7 +22,6 @@ export default function AuthModal() {
     setName("");
     setEmail("");
     setPassword("");
-    setReferralInput("");
     setError("");
   }
 
@@ -39,7 +37,7 @@ export default function AuthModal() {
     try {
       if (mode === "signup") {
         if (password.length < 6) throw new Error("Password must be at least 6 characters.");
-        await signup({ name, email, password, referredByCode: referralInput.trim().toUpperCase() || null });
+        await signup({ name, email, password });
       } else {
         await login({ email, password });
       }
@@ -56,7 +54,7 @@ export default function AuthModal() {
     setError("");
     setLoading(true);
     try {
-      await loginWithGoogle({ referredByCode: referralInput.trim().toUpperCase() || null });
+      await loginWithGoogle();
       resetFields();
       handleAuthSuccess();
     } catch (err) {
@@ -84,7 +82,7 @@ export default function AuthModal() {
           {mode === "signup" ? "Create your account" : "Log in"}
         </h3>
         <p className="text-xs text-text/55 dark:text-[#9b82b0] mb-4">
-          {mode === "signup" ? "Save your order history and unlock referral rewards." : "Welcome back."}
+          {mode === "signup" ? "Save your order history for easy reordering." : "Welcome back."}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -113,15 +111,6 @@ export default function AuthModal() {
             required
             className="w-full rounded-xl border border-gray-200 dark:border-[#3a3050] bg-white dark:bg-[#1e1a30] px-3.5 py-2.5 text-sm text-gray-900 dark:text-[#e0d4f0] placeholder-gray-300 dark:placeholder-[#4a3868] focus:outline-none focus:ring-2 focus:ring-yarn/40 focus:border-yarn transition"
           />
-          {mode === "signup" && (
-            <input
-              value={referralInput}
-              onChange={(e) => setReferralInput(e.target.value)}
-              placeholder="Referral code (optional)"
-              className="w-full rounded-xl border border-gray-200 dark:border-[#3a3050] bg-white dark:bg-[#1e1a30] px-3.5 py-2.5 text-sm text-gray-900 dark:text-[#e0d4f0] placeholder-gray-300 dark:placeholder-[#4a3868] focus:outline-none focus:ring-2 focus:ring-yarn/40 focus:border-yarn transition uppercase"
-            />
-          )}
-
           {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
           <button

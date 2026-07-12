@@ -23,23 +23,6 @@ function StatusChip({ status }) {
   );
 }
 
-function CopyIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
 function BagIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -60,7 +43,6 @@ export default function Account() {
   const { user, profile, logout } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
-  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
     async function loadOrders() {
@@ -79,15 +61,7 @@ export default function Account() {
     loadOrders();
   }, [user]);
 
-  function copyReferralCode() {
-    if (!profile?.referralCode) return;
-    navigator.clipboard.writeText(profile.referralCode);
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 1500);
-  }
-
   const initial = (profile?.name || user?.email || "?").trim().charAt(0).toUpperCase();
-  const referralsToGo = Math.max(0, 3 - (profile?.successfulReferralCount || 0));
 
   return (
     <PageContainer variant="tight">
@@ -111,54 +85,6 @@ export default function Account() {
           </div>
 
           <div className="h-px bg-yarn/10 dark:bg-[#2a2040] my-5" />
-
-          {/* Referral code chip */}
-          <div className="flex items-center justify-between gap-3 rounded-2xl bg-cream/70 dark:bg-[#1e1a30] border border-yarn/12 dark:border-[#2a2040] px-4 py-3 mb-3">
-            <div className="min-w-0">
-              <p className="text-[10px] tracking-[0.16em] uppercase font-semibold text-yarn/50 dark:text-[#6a5878] mb-1">
-                Your referral code
-              </p>
-              <p className="font-mono text-lg font-bold text-yarn dark:text-[#d4b8e0] tracking-wide">
-                {profile?.referralCode || "generating…"}
-              </p>
-            </div>
-            {profile?.referralCode && (
-              <button
-                onClick={copyReferralCode}
-                className={`shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition
-                  ${copySuccess
-                    ? "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300"
-                    : "bg-yarn dark:bg-[#3a2e50] text-white hover:opacity-90"
-                  }`}
-              >
-                {copySuccess ? <CheckIcon /> : <CopyIcon />}
-                {copySuccess ? "Copied" : "Copy"}
-              </button>
-            )}
-          </div>
-
-          {/* Referral progress */}
-          <div className="rounded-2xl bg-cream/70 dark:bg-[#1e1a30] border border-yarn/12 dark:border-[#2a2040] px-4 py-3.5">
-            <div className="flex items-baseline justify-between mb-2">
-              <p className="text-[10px] tracking-[0.16em] uppercase font-semibold text-yarn/50 dark:text-[#6a5878]">
-                Successful referrals
-              </p>
-              <p className="text-sm font-bold text-text dark:text-[#e0d4f0]">
-                {profile?.successfulReferralCount || 0}<span className="text-text/35 dark:text-[#5a4878] font-medium"> / 3</span>
-              </p>
-            </div>
-            <div className="h-2.5 rounded-full bg-yarn/15 dark:bg-[#0f0d1a] border border-yarn/10 dark:border-[#2a2040] overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-pinky to-yarn dark:from-[#f0aad0] dark:to-[#8a5cae] transition-all duration-500 min-w-[10px]"
-                style={{ width: `${Math.min(100, ((profile?.successfulReferralCount || 0) / 3) * 100)}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-text/45 dark:text-[#7a6490] mt-2">
-              {referralsToGo === 0
-                ? "You've unlocked your 30% off reward 🎉"
-                : `${referralsToGo} more successful referral${referralsToGo === 1 ? "" : "s"} for 30% off`}
-            </p>
-          </div>
 
           <button
             onClick={logout}
