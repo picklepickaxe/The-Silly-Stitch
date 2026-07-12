@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 const admin = require("firebase-admin");
 
 // ─── Firebase Admin init ────────────────────────────────────────
@@ -27,10 +28,9 @@ const app = express();
 app.use(express.json());
 
 // Lock CORS to your real frontend origin(s) only.
-// Add your production domain once you have one; keep localhost for dev.
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "https://the-silly-stitch.vercel.app", // TODO: replace with your real deployed frontend URL
+  "https://the-silly-stitch.vercel.app",
 ];
 
 app.use(
@@ -48,7 +48,7 @@ app.use(
 
 // ─── Constants (mirrors firestore.rules validation) ─────────────
 const MAX_ITEMS = 50;
-const MAX_QTY_PER_ITEM = 20;
+const MAX_QTY_PER_ITEM = 20; // enforced on the AGGREGATED quantity per productId, see below
 const NAME_MAX = 128;
 const EMAIL_MAX = 256;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -83,8 +83,24 @@ async function requireRealUser(req, res, next) {
   }
 }
 
+// ─── Rate limiting ────────────────────────────────────────────────
+// Runs AFTER requireRealUser so req.uid is available — keys by uid
+// rather than IP, so it can't be sidestepped by rotating networks,
+// and doesn't accidentally throttle a whole shared IP (e.g. campus
+// wifi, a mobile carrier NAT) down to one person's allowance.
+const placeOrderLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,              // 5 orders per user per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.uid || req.ip,
+  handler: (req, res) => {
+    res.status(429).json({ error: "Too many orders placed. Please wait a moment and try again." });
+  },
+});
+
 // ─── Route: place an order ───────────────────────────────────────
-app.post("/placeOrder", requireRealUser, async (req, res) => {
+app.post("/placeOrder", requireRealUser, placeOrderLimiter, async (req, res) => {
   try {
     const { items, customerName, email, phone } = req.body || {};
 
@@ -112,6 +128,10 @@ app.post("/placeOrder", requireRealUser, async (req, res) => {
       return res.status(400).json({ error: "Your cart is empty or has too many items." });
     }
 
+    // --- aggregate quantities per product FIRST, then cap the total ---
+    // (previously the cap was checked per raw entry, so splitting one
+    // product across multiple cart entries could bypass it — e.g. three
+    // entries of {productId: "X", quantity: 20} summed to 60 units of X)
     const quantityByProductId = new Map();
     for (const raw of items) {
       const productId = raw?.productId;
@@ -120,10 +140,18 @@ app.post("/placeOrder", requireRealUser, async (req, res) => {
       if (typeof productId !== "string" || productId.length === 0) {
         return res.status(400).json({ error: "Invalid item in cart." });
       }
-      if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QTY_PER_ITEM) {
+      if (!Number.isInteger(quantity) || quantity < 1) {
         return res.status(400).json({ error: "Invalid quantity in cart." });
       }
       quantityByProductId.set(productId, (quantityByProductId.get(productId) || 0) + quantity);
+    }
+
+    for (const [, quantity] of quantityByProductId) {
+      if (quantity > MAX_QTY_PER_ITEM) {
+        return res.status(400).json({
+          error: `You can order at most ${MAX_QTY_PER_ITEM} of a single item.`,
+        });
+      }
     }
 
     // --- resolve REAL prices/names from Firestore, never trust client ---
