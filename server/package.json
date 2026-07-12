@@ -1,0 +1,22 @@
+{
+  "name": "the-silly-stitch-server",
+  "version": "1.0.0",
+  "description": "Backend server for The Silly Stitch — handles order placement with server-side price validation",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}

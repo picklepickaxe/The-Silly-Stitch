@@ -1,6 +1,7 @@
 {
   "projects": {
-    "sillystitch": "the-silly-stitch"
+    "sillystitch": "the-silly-stitch",
+    "default": "the-silly-stitch"
   },
   "targets": {},
   "etags": {}

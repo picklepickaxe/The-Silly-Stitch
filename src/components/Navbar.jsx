@@ -2,11 +2,13 @@ import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const { totalItems } = useCart();
   const { darkMode, toggleDark } = useTheme();
+  const { isLoggedIn, profile, user, openAuthModal } = useAuth();
 
   return (
     <nav className="fixed top-4 left-0 right-0 z-50">
@@ -100,6 +102,23 @@ export default function Navbar() {
                   </svg>
                 )}
               </button>
+
+              {isLoggedIn ? (
+                <Link
+                  to="/account"
+                  className="w-7 h-7 rounded-full bg-yarn/15 dark:bg-[#2a1f3d] flex items-center justify-center text-yarn dark:text-[#c4a8cc] font-semibold text-xs hover:bg-yarn/25 transition"
+                  title="Your account"
+                >
+                  {(profile?.name || user?.email || "?").charAt(0).toUpperCase()}
+                </Link>
+              ) : (
+                <button
+                  onClick={() => openAuthModal({ mode: "signup" })}
+                  className="px-4 py-1.5 rounded-full bg-yarn dark:bg-[#2a1f3d] text-white text-xs font-semibold tracking-wide hover:bg-yarn/90 dark:hover:bg-[#3a2e50] active:scale-[0.98] transition-all"
+                >
+                  Sign Up
+                </button>
+              )}
             </div>
 
             {/* Mobile menu button */}
@@ -159,6 +178,26 @@ export default function Navbar() {
               <Link to="/contact" onClick={() => setOpen(false)} className="hover:text-gray-900 dark:hover:text-white">
                 Contact
               </Link>
+
+              {isLoggedIn ? (
+                <Link
+                  to="/account"
+                  onClick={() => setOpen(false)}
+                  className="hover:text-gray-900 dark:hover:text-white"
+                >
+                  {(profile?.name || user?.email || "?").charAt(0).toUpperCase()}
+                </Link>
+              ) : (
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    openAuthModal({ mode: "signup" });
+                  }}
+                  className="w-fit px-4 py-2 rounded-full bg-yarn dark:bg-[#2a1f3d] text-white text-xs font-semibold tracking-wide hover:bg-yarn/90 dark:hover:bg-[#3a2e50] active:scale-[0.98] transition-all"
+                >
+                  Sign Up
+                </button>
+              )}
 
               <button
                 onClick={toggleDark}

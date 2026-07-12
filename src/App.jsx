@@ -4,9 +4,12 @@ import Home from "./Pages/Home.jsx";
 import Shop from "./Pages/Shop.jsx";
 import Contact from "./Pages/Contact.jsx";
 import CartPage from "./Pages/CartPage.jsx";
+import Account from "./Pages/Account.jsx";
 import Admin from "./Pages/Admin.jsx";
 import AdminLogin from "./Pages/AdminLogin.jsx";
+import AdminProtectedRoute from "./components/AdminProtectedRoute.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import AuthModal from "./components/AuthModal.jsx";
 import Footer from "./components/Footer.jsx";
 
 export default function App() {
@@ -16,13 +19,11 @@ export default function App() {
   return (
     <>
       {isAdminPage ? (
-        // Admin pages: no Navbar, no cream wrapper
         <Routes>
-          <Route path="/admin27" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+          <Route path="/admin27" element={<AdminProtectedRoute><Admin /></AdminProtectedRoute>} />
           <Route path="/admin27-login" element={<AdminLogin />} />
         </Routes>
       ) : (
-        // Public pages: Navbar + cream background
         <div className="bg-cream dark:bg-[#0f0d1a] min-h-screen overflow-x-hidden transition-colors duration-300">
           <Navbar />
           <div className="pt-24 sm:pt-28">
@@ -31,11 +32,13 @@ export default function App() {
               <Route path="/shop" element={<Shop />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/contact" element={<Contact />} />
+              <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
             </Routes>
           </div>
           <Footer />
         </div>
       )}
+      <AuthModal />
     </>
   );
 }

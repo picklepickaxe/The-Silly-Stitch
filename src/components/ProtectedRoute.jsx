@@ -1,10 +1,19 @@
-import { Navigate } from "react-router-dom";
+// src/components/ProtectedRoute.jsx  (new — customer-facing, e.g. guards /account)
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function ProtectedRoute({ children }) {
-  const { user } = useAuth();
+  const { user, isLoggedIn, openAuthModal } = useAuth();
+  const navigate = useNavigate();
 
-  // Still checking auth state — show nothing to avoid flash
+  useEffect(() => {
+    if (user === null) {
+      openAuthModal({ mode: "login" });
+      navigate("/", { replace: true });
+    }
+  }, [user]);
+
   if (user === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -13,11 +22,7 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  // Not logged in — send to login page
-  if (user === null) {
-    return <Navigate to="/admin27-login" replace />;
-  }
+  if (!isLoggedIn) return null;
 
-  // Logged in — render the protected page
   return children;
 }

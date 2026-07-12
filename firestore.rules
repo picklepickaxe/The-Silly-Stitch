@@ -6,68 +6,83 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isRealUser() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
     function isAdmin() {
       return signedIn() && request.auth.token.admin == true;
     }
 
-    // Validates a new order write has the correct shape and safe values
+    function isOwner(uid) {
+      return isRealUser() && request.auth.uid == uid;
+    }
+
     function validOrderCreate() {
       let data = request.resource.data;
       return
-        // Required string fields exist and are not empty
+        data.keys().hasOnly([
+          'orderId',
+          'userId',
+          'customerName',
+          'email',
+          'phone',
+          'items',
+          'total',
+          'status',
+          'whatsappConfirmed',
+          'createdAt'
+        ]) &&
         data.orderId is string && data.orderId.size() > 0 && data.orderId.size() < 64 &&
+        data.userId is string && data.userId == request.auth.uid &&
         data.customerName is string && data.customerName.size() > 0 && data.customerName.size() < 128 &&
         data.email is string && data.email.size() > 0 && data.email.size() < 256 &&
-        data.phone is string && data.phone.size() == 10 &&
-
-        // Total must be a positive number
+        data.phone is string && data.phone.matches('^[0-9]{10}$') &&
         data.total is number && data.total > 0 && data.total < 1000000 &&
-
-        // Items must be a list with at least 1 and at most 50 entries
         data.items is list && data.items.size() > 0 && data.items.size() <= 50 &&
-
-        // Status must start as pending
         data.status == "pending" &&
-
-        // whatsappConfirmed must start as false
         data.whatsappConfirmed == false;
     }
 
-    // ── Products ──────────────────────────────────────────
-    // Anyone can read products (shop page needs this)
-    // Only admin can add, edit, or delete products
     match /products/{productId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // ── Orders ───────────────────────────────────────────
     match /orders/{orderId} {
-      // Customers can create an order only if signed in (anonymous auth)
-      // and only if the order data passes validation
-      allow create: if signedIn() && validOrderCreate();
-
-      // Only admin can read orders (dashboard)
-      allow read: if isAdmin();
-
-      // Only admin can update orders (status, whatsapp confirmed, etc.)
-      // Regular users have NO update access at all
+      allow create: if isRealUser() && validOrderCreate();
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
       allow update: if isAdmin();
-
-      // Only admin can delete orders
       allow delete: if isAdmin();
     }
 
-    // ── Announcements ─────────────────────────────────────
-    // Anyone can read announcements (home page needs this)
-    // Only admin can create, edit, or delete announcements
     match /announcements/{announcementId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // ── Catch-all ─────────────────────────────────────────
-    // Deny everything else by default
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+
+      allow create: if isOwner(uid) &&
+        request.resource.data.successfulReferralCount == 0 &&
+        request.resource.data.rewardsAvailable == 0 &&
+        request.resource.data.referralSignupDiscountUsed == false &&
+        request.resource.data.referralCode is string;
+
+      allow update: if isAdmin() ||
+        (isOwner(uid) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone']));
+
+      allow delete: if false;
+    }
+
+    match /referralCodes/{code} {
+      allow read: if signedIn();
+      allow create: if isOwner(request.resource.data.uid);
+      allow update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

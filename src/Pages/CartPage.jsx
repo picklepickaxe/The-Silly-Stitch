@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import PageContainer from "../components/PageContainer";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
 import { db } from "../firebase/Config";
 import { Link } from "react-router-dom";
 
@@ -42,6 +43,7 @@ function generateOrderId() {
 
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart, clearCart, totalPrice, totalItems } = useCart();
+  const { isLoggedIn, openAuthModal, user } = useAuth();
   const [checkoutDraft] = useState(() => readFromStorage(CART_CHECKOUT_DRAFT_KEY, {}));
 
   const [customerName, setCustomerName] = useState(checkoutDraft.customerName || "");
@@ -104,7 +106,7 @@ export default function Cart() {
   }
 
   async function submitOrderToWhatsapp() {
-    if (!cartItems.length || !isFormValid || placingOrder) return;
+    if (!cartItems.length || !isFormValid || placingOrder || !isLoggedIn) return;
 
     setError("");
     setPlacingOrder(true);
@@ -122,6 +124,7 @@ export default function Cart() {
 
       const orderPayload = {
         orderId,
+        userId: user.uid,
         customerName: customerName.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -168,6 +171,11 @@ export default function Cart() {
 
   function handleOrderNow() {
     if (!cartItems.length || !isFormValid || placingOrder) return;
+
+    if (!isLoggedIn) {
+      openAuthModal({ mode: "login", onSuccess: () => handleOrderNow() });
+      return;
+    }
 
     setError("");
     if (hasAcceptedOrderPolicy) {
