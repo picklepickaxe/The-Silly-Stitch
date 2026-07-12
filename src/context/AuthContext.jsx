@@ -87,6 +87,7 @@ export function AuthProvider({ children }) {
 
       if (firebaseUser) {
         const tokenResult = await firebaseUser.getIdTokenResult();
+        console.log("admin claim:", tokenResult.claims.admin, "full claims:", tokenResult.claims); // ← add this line
         setIsAdmin(!!tokenResult.claims.admin);
 
         if (!firebaseUser.isAnonymous) {

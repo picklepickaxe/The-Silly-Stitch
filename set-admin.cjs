@@ -23,4 +23,4 @@ async function setAdmin(email) {
   process.exit(0);
 }
 
-setAdmin("aviralkakodia27@gmail.com");
+setAdmin("boopweee@gmail.com");
