@@ -446,7 +446,7 @@ function ProductsPanel({
 // --- Main component ----------------------------
 
 export default function Admin() {
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
   const [products, setProducts]       = useState([]);
@@ -500,8 +500,10 @@ export default function Admin() {
   const { darkMode, toggleDark } = useTheme();
 
   useEffect(() => {
-    if (user === null) navigate("/admin27-login", { replace: true });
-  }, [user, navigate]);
+    if (user === null || (user && !isAdmin)) {
+      navigate("/admin27-login", { replace: true });
+    }
+  }, [user, isAdmin, navigate]);
 
   useEffect(() => {
     const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
