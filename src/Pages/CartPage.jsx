@@ -6,7 +6,6 @@ import { Link } from "react-router-dom";
 
 const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || "8799741646";
 const CART_CHECKOUT_DRAFT_KEY = "silly-stitch-cart-checkout-draft";
-const ORDER_POLICY_ACCEPTED_KEY = "silly-stitch-order-policy-accepted";
 
 function readFromStorage(key, fallback = null) {
   if (typeof window === "undefined") return fallback;
@@ -52,10 +51,6 @@ export default function Cart() {
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [confirmReadHowTo, setConfirmReadHowTo] = useState(false);
   const [confirmReadPolicy, setConfirmReadPolicy] = useState(false);
-  const [hasAcceptedOrderPolicy, setHasAcceptedOrderPolicy] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(ORDER_POLICY_ACCEPTED_KEY) === "true";
-  });
 
   const isFormValid = useMemo(() => {
     if (!isLoggedIn) return true; // phone alone is enough pre-login; login gate happens on click
@@ -175,21 +170,11 @@ export default function Cart() {
     if (!isFormValid) return;
 
     setError("");
-    if (hasAcceptedOrderPolicy) {
-      void submitOrderToWhatsapp();
-      return;
-    }
-
     setShowPolicyModal(true);
   }
 
   async function handlePolicyConfirmAndOrder() {
     if (!confirmReadHowTo || !confirmReadPolicy || placingOrder) return;
-
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ORDER_POLICY_ACCEPTED_KEY, "true");
-    }
-    setHasAcceptedOrderPolicy(true);
     closePolicyModal();
     await submitOrderToWhatsapp();
   }
@@ -407,9 +392,9 @@ export default function Cart() {
                 You'll be redirected to WhatsApp to confirm
               </p>
 
-              {isLoggedIn && !hasAcceptedOrderPolicy && (
+              {isLoggedIn && (
                 <p className="mt-1 text-center text-[11px] text-text/55 dark:text-[#9b82b0]">
-                  First order requires one-time policy confirmation.
+                  Policy confirmation is required before each order.
                 </p>
               )}
             </div>
