@@ -44,6 +44,12 @@ function metricsMiddleware(req, res, next) {
   hasHandledFirstRequest = true;
 
   res.on("finish", () => {
+    // Skip infra/platform pings to root — not real app traffic,
+    // and we don't want them polluting our latency metrics.
+    if (req.originalUrl === "/") {
+      return;
+    }
+
     const durationMs = Date.now() - req._metricsStart;
     const entry = {
       route: req.originalUrl,
@@ -61,7 +67,6 @@ function metricsMiddleware(req, res, next) {
       }`
     );
 
-    // Fire-and-forget: never block or slow down the actual response.
     db.collection("server_metrics")
       .add(entry)
       .catch((err) => console.error("[metrics] Firestore write failed:", err.message));
