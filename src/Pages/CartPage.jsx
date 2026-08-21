@@ -47,6 +47,7 @@ export default function Cart() {
   const [checkoutSavedAt, setCheckoutSavedAt] = useState(checkoutDraft.savedAt || null);
 
   const [placingOrder, setPlacingOrder] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Placing order...");
   const [error, setError] = useState("");
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [confirmReadHowTo, setConfirmReadHowTo] = useState(false);
@@ -97,6 +98,10 @@ export default function Cart() {
 
     setError("");
     setPlacingOrder(true);
+    setLoadingMessage("Placing order...");
+
+    const t1 = setTimeout(() => setLoadingMessage("Still working on it..."), 4000);
+    const t2 = setTimeout(() => setLoadingMessage("Waking up our server, almost there..."), 10000);
 
     try {
       const idToken = await user.getIdToken();
@@ -153,6 +158,8 @@ export default function Cart() {
       console.error(err);
       setError(err.message || "Could not place order. Please try again.");
     } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
       setPlacingOrder(false);
     }
   }
@@ -381,7 +388,13 @@ export default function Cart() {
                 disabled={(isLoggedIn && !isFormValid) || placingOrder}
                 className="mt-5 w-full bg-yarn text-white py-3 rounded-xl text-sm font-semibold tracking-wide disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] transition-all"
               >
-                {placingOrder ? "Placing order..." : "Order on WhatsApp →"}
+                {placingOrder && (
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
+                {placingOrder ? loadingMessage : "Order on WhatsApp →"}
               </button>
 
               {isLoggedIn && (
