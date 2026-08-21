@@ -61,7 +61,6 @@ function ProductOverlay({ product, onClose, onAddToCart }) {
 }
 
 // ─── Shop Navbar ──────────────────────────────────────────────────────────────
-import { collection, getDocs, query, orderBy, limit, startAfter } from "firebase/firestore";
 
 const PRICE_OPTIONS = [
   { label: "All prices", value: "all" },
