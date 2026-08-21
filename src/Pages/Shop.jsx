@@ -61,7 +61,7 @@ function ProductOverlay({ product, onClose, onAddToCart }) {
 }
 
 // ─── Shop Navbar ──────────────────────────────────────────────────────────────
-const CATEGORIES = ["all", "keychain", "plushie", "bracelet", "accessory", "custom"];
+import { collection, getDocs, query, orderBy, limit, startAfter } from "firebase/firestore";
 
 const PRICE_OPTIONS = [
   { label: "All prices", value: "all" },
@@ -72,7 +72,7 @@ const PRICE_OPTIONS = [
   { label: "Under ₹500", value: 500 },
 ];
 
-function ShopNavbar({ category, setCategory, priceFilter, setPriceFilter, search, setSearch }) {
+function ShopNavbar({ categoryOptions, category, setCategory, priceFilter, setPriceFilter, search, setSearch }) {
   return (
     <div className="sticky top-0 z-20 mb-4">
       <div className="relative overflow-hidden rounded-2xl border border-[#ead8bd] dark:border-[#3b2f53] bg-gradient-to-br from-[#fff7e8]/95 via-[#fffdf6]/95 to-[#fdeedf]/95 dark:from-[#1b152c]/95 dark:via-[#181226]/95 dark:to-[#221a34]/95 px-4 py-3 shadow-[0_10px_28px_rgba(107,78,113,0.14)] backdrop-blur-xl">
@@ -82,7 +82,7 @@ function ShopNavbar({ category, setCategory, priceFilter, setPriceFilter, search
         <div className="relative flex flex-col gap-3">
           {/* Categories */}
           <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-            {CATEGORIES.map((c) => (
+            {categoryOptions.map((c) => (
               <button
                 key={c}
                 onClick={() => setCategory(c)}
@@ -142,6 +142,7 @@ export default function Shop() {
   const [category, setCategory]     = useState("all");
   const [priceFilter, setPriceFilter] = useState("all");
   const [search, setSearch]         = useState("");
+  const [categoryOptions, setCategoryOptions] = useState(["all"]);
 
   // Firestore cursor — holds the last DocumentSnapshot of the previous page
   const lastDocRef = useRef(null);
@@ -198,6 +199,21 @@ export default function Shop() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  
+  // ── Fetch categories once for the filter pills ─────────────────────────────
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const snap = await getDocs(collection(db, "categories"));
+        const names = snap.docs.map((d) => d.data().name).sort();
+        setCategoryOptions(["all", ...names]);
+      } catch (err) {
+        console.error("Failed to fetch categories:", err);
+      }
+    }
+    fetchCategories();
+  }, []);
+
   // ── Reset & re-fetch when filters change ─────────────────────────────────
   // NOTE: category / priceFilter / search are applied CLIENT-SIDE below.
   // If your catalogue grows large, move these to Firestore `where()` clauses
@@ -235,6 +251,7 @@ export default function Shop() {
       </h1>
 
       <ShopNavbar
+        categoryOptions={categoryOptions}
         category={category}       setCategory={setCategory}
         priceFilter={priceFilter} setPriceFilter={setPriceFilter}
         search={search}           setSearch={setSearch}

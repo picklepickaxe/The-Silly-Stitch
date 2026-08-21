@@ -45,7 +45,7 @@ const SORT_FIELDS = [
   { value: "total",     label: "Total"    },
 ];
 
-const PRODUCT_CATEGORY_OPTIONS = ["keychain", "plushie", "bracelet", "accessory", "custom"];
+
 
 // ─── Helpers ───────────────────────────────────
 
@@ -301,9 +301,82 @@ function AnnouncementsPanel({
   );
 }
 
+function CategoriesPanel({
+  open,
+  onClose,
+  categories,
+  categoriesLoading,
+  categoryError,
+  newCategoryName,
+  setNewCategoryName,
+  handleAddCategory,
+  handleDeleteCategory,
+  savingCategory,
+  deletingCategoryId,
+}) {
+  if (!open) return null;
+
+  return (
+    <SlidePanel open={open} title="Categories" onClose={onClose}>
+      <section className="rounded-2xl border border-yarn/12 dark:border-[#2a2040] bg-[#FFFDF5] dark:bg-[#16122a] p-4 sm:p-5">
+        <div className="flex items-center justify-end gap-3 mb-4">
+          <span className="text-xs text-text/40 dark:text-[#7a6490]">
+            {categories.length} item{categories.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {categoryError && (
+          <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 px-3 py-2.5 text-sm text-red-600 dark:text-red-300 mb-4">
+            {categoryError}
+          </div>
+        )}
+
+        <form onSubmit={handleAddCategory} className="flex gap-2 mb-4">
+          <input
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            placeholder="New category (e.g. coaster)"
+            className="flex-1 rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-sm text-text dark:text-[#e0d4f0] placeholder:text-text/40 dark:placeholder:text-[#6a5878]"
+          />
+          <button
+            type="submit"
+            disabled={savingCategory}
+            className="rounded-xl bg-yarn dark:bg-[#2a1f3d] text-white dark:text-[#e0d4f0] px-4 py-2 text-sm font-medium disabled:opacity-60"
+          >
+            {savingCategory ? "Adding..." : "Add"}
+          </button>
+        </form>
+
+        {categoriesLoading ? (
+          <p className="text-sm text-text/45 dark:text-[#7a6490]">Loading categories...</p>
+        ) : categories.length === 0 ? (
+          <p className="text-sm text-text/45 dark:text-[#7a6490]">No categories yet. Add one above.</p>
+        ) : (
+          <div className="space-y-2">
+            {categories.map((cat) => (
+              <div key={cat.docId} className="flex items-center justify-between gap-3 rounded-xl border border-yarn/12 dark:border-[#2a2040] bg-cream/50 dark:bg-[#1e1a30] px-3 py-2.5">
+                <p className="text-sm font-medium capitalize text-text dark:text-[#e0d4f0]">{cat.name}</p>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCategory(cat.docId, cat.name)}
+                  disabled={deletingCategoryId === cat.docId}
+                  className="rounded-lg border border-red-200 dark:border-red-800 px-2.5 py-1.5 text-xs text-red-600 dark:text-red-300 disabled:opacity-60"
+                >
+                  {deletingCategoryId === cat.docId ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </SlidePanel>
+  );
+}
+
 function ProductsPanel({
   open,
   onClose,
+  categories,
   products,
   productsLoading,
   productError,
@@ -356,9 +429,9 @@ function ProductsPanel({
             className="rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-sm text-text dark:text-[#e0d4f0]"
           >
             <option value="">Select category</option>
-            {PRODUCT_CATEGORY_OPTIONS.map((option) => (
-              <option key={option} value={option} className="capitalize">
-                {option}
+            {categories.map((cat) => (
+              <option key={cat.docId} value={cat.name} className="capitalize">
+                {cat.name}
               </option>
             ))}
           </select>
@@ -488,6 +561,12 @@ export default function Admin() {
   const [products, setProducts]       = useState([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productError, setProductError] = useState(null);
+    const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoryError, setCategoryError] = useState(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState(null);
   const [editingProductId, setEditingProductId] = useState(null);
   const [savingProduct, setSavingProduct] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState(null);
@@ -534,6 +613,7 @@ export default function Admin() {
 
   const [showAnnouncementsPanel, setShowAnnouncementsPanel] = useState(false);
   const [showProductsPanel, setShowProductsPanel] = useState(false);
+  const [showCategoriesPanel, setShowCategoriesPanel] = useState(false);
 
   const { darkMode, toggleDark } = useTheme();
 
@@ -556,6 +636,26 @@ export default function Admin() {
         console.error("Firestore error:", err);
         setFetchError("Could not load orders. Check your connection or Firestore rules.");
         setLoading(false);
+      }
+    );
+  }, []);
+
+    useEffect(() => {
+    return onSnapshot(
+      collection(db, "categories"),
+      (snap) => {
+        const docs = snap.docs
+          .map((d) => ({ docId: d.id, ...d.data() }))
+          .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+
+        setCategories(docs);
+        setCategoriesLoading(false);
+        setCategoryError(null);
+      },
+      (err) => {
+        console.error("Categories error:", err);
+        setCategoryError("Could not load categories. Check your Firestore rules.");
+        setCategoriesLoading(false);
       }
     );
   }, []);
@@ -869,7 +969,8 @@ export default function Admin() {
     const category = String(productForm.category || "").trim().toLowerCase();
     const price = Number(productForm.price);
 
-    if (!name || Number.isNaN(price) || price < 0 || !PRODUCT_CATEGORY_OPTIONS.includes(category)) {
+    const categoryNames = categories.map((c) => c.name);
+    if (!name || Number.isNaN(price) || price < 0 || !categoryNames.includes(category)) {
       showToast("Name, valid price, and category are required", "error");
       return;
     }
@@ -920,6 +1021,59 @@ export default function Admin() {
       showToast("Could not delete product", "error");
     } finally {
       setDeletingProductId(null);
+    }
+  }
+
+    async function handleAddCategory(e) {
+    e.preventDefault();
+    if (savingCategory) return;
+
+    const name = newCategoryName.trim().toLowerCase();
+    if (!name) {
+      showToast("Category name is required", "error");
+      return;
+    }
+
+    const alreadyExists = categories.some((c) => c.name === name);
+    if (alreadyExists) {
+      showToast("That category already exists", "error");
+      return;
+    }
+
+    setSavingCategory(true);
+    try {
+      await addDoc(collection(db, "categories"), {
+        name,
+        createdAt: serverTimestamp(),
+      });
+      setNewCategoryName("");
+      showToast("Category added");
+    } catch (err) {
+      console.error(err);
+      showToast("Could not add category", "error");
+    } finally {
+      setSavingCategory(false);
+    }
+  }
+
+  async function handleDeleteCategory(docId, name) {
+    const inUse = products.some((p) => p.category === name);
+    const warning = inUse
+      ? `Some products still use "${name}". They'll keep this category text, but it won't be selectable anymore. Delete anyway?`
+      : `Delete category "${name}"?`;
+
+    const ok = window.confirm(warning);
+    if (!ok) return;
+
+    setDeletingCategoryId(docId);
+    try {
+      await deleteDoc(doc(db, "categories", docId));
+      showToast("Category deleted");
+    } catch (err) {
+      console.error(err);
+      showToast("Could not delete category", "error");
+    } finally {
+      setDeletingCategoryId(null);
     }
   }
 
@@ -1074,6 +1228,12 @@ export default function Admin() {
                   className="w-full rounded-xl py-2.5 text-sm font-medium bg-pinky text-[#5a2434] dark:bg-[#3a1e35] dark:text-[#f0aad0] hover:opacity-90 shadow-sm transition"
                 >
                   Products
+                </button>
+                                <button
+                  onClick={() => setShowCategoriesPanel(true)}
+                  className="w-full rounded-xl py-2.5 text-sm font-medium bg-cream border border-yarn/25 text-yarn dark:bg-[#1e1a30] dark:border-[#3d2f5a] dark:text-[#c4a8cc] hover:opacity-90 shadow-sm transition"
+                >
+                  Categories
                 </button>
               </div>
 
@@ -1459,10 +1619,12 @@ export default function Admin() {
         resetAnnouncementForm={resetAnnouncementForm}
         announcementDraftSavedAt={announcementDraftSavedAt}
       />
+      
 
       <ProductsPanel
         open={showProductsPanel}
         onClose={() => setShowProductsPanel(false)}
+        categories={categories}
         products={products}
         productsLoading={productsLoading}
         productError={productError}
@@ -1480,6 +1642,20 @@ export default function Admin() {
         removeProductImage={removeProductImage}
         uploadingImages={uploadingImages}
         uploadProgress={uploadProgress}
+      />
+
+      <CategoriesPanel
+        open={showCategoriesPanel}
+        onClose={() => setShowCategoriesPanel(false)}
+        categories={categories}
+        categoriesLoading={categoriesLoading}
+        categoryError={categoryError}
+        newCategoryName={newCategoryName}
+        setNewCategoryName={setNewCategoryName}
+        handleAddCategory={handleAddCategory}
+        handleDeleteCategory={handleDeleteCategory}
+        savingCategory={savingCategory}
+        deletingCategoryId={deletingCategoryId}
       />
 
     </div>

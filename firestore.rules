@@ -39,6 +39,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
 
