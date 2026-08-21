@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../firebase/Config";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { uploadImagesToCloudinary } from "../utils/cloudinary";
 
 // ─────────────────────────────────────────────
 // Colour tokens
@@ -316,6 +317,10 @@ function ProductsPanel({
   deletingProductId,
   resetProductForm,
   productDraftSavedAt,
+  handleImageFilesSelected,
+  removeProductImage,
+  uploadingImages,
+  uploadProgress,
 }) {
   if (!open) return null;
 
@@ -364,18 +369,49 @@ function ProductsPanel({
             inputMode="decimal"
             className="rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-sm text-text dark:text-[#e0d4f0] placeholder:text-text/40 dark:placeholder:text-[#6a5878]"
           />
-          <input
-            value={productForm.imageUrl}
-            onChange={(e) => setProductForm((p) => ({ ...p, imageUrl: e.target.value }))}
-            placeholder="Primary image URL"
-            className="rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-sm text-text dark:text-[#e0d4f0] placeholder:text-text/40 dark:placeholder:text-[#6a5878]"
-          />
-          <input
-            value={productForm.images}
-            onChange={(e) => setProductForm((p) => ({ ...p, images: e.target.value }))}
-            placeholder="Extra image URLs (comma separated)"
-            className="rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-sm text-text dark:text-[#e0d4f0] placeholder:text-text/40 dark:placeholder:text-[#6a5878]"
-          />
+                    <div className="sm:col-span-2 space-y-2">
+            <label className="block text-xs font-medium text-text/60 dark:text-[#9b82b0]">
+              Product images
+            </label>
+
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              disabled={uploadingImages}
+              onChange={handleImageFilesSelected}
+              className="w-full text-sm rounded-xl border border-yarn/20 dark:border-[#3d2f5a] bg-cream/70 dark:bg-[#1e1a30] px-3 py-2.5 text-text dark:text-[#e0d4f0] file:mr-3 file:rounded-lg file:border-0 file:bg-yarn file:text-white file:px-3 file:py-1.5 file:text-xs file:font-medium disabled:opacity-60"
+            />
+
+            {uploadingImages && (
+              <p className="text-xs text-yarn dark:text-[#c4a8cc]">
+                Uploading {uploadProgress.done}/{uploadProgress.total}…
+              </p>
+            )}
+
+            {productForm.images && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {productForm.images.split("|").map((s) => s.trim()).filter(Boolean).map((url) => (
+                  <div key={url} className="relative">
+                    <img
+                      src={url}
+                      alt=""
+                      className="w-16 h-16 rounded-lg object-cover border border-yarn/15 dark:border-[#3d2f5a]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeProductImage(url)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center shadow"
+                      title="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <textarea
             value={productForm.description}
             onChange={(e) => setProductForm((p) => ({ ...p, description: e.target.value }))}
@@ -466,6 +502,8 @@ export default function Admin() {
     })
   );
   const [productDraftSavedAt, setProductDraftSavedAt] = useState(() => readDraftSavedAt(ADMIN_PRODUCT_DRAFT_KEY));
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
 
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
@@ -609,6 +647,54 @@ export default function Admin() {
 
   const showToast = useCallback((msg, type = "success") => setToast({ msg, type }), []);
 
+    async function handleImageFilesSelected(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setUploadingImages(true);
+    setUploadProgress({ done: 0, total: files.length });
+
+    try {
+      const urls = await uploadImagesToCloudinary(files, () => {
+        setUploadProgress((p) => ({ ...p, done: p.done + 1 }));
+      });
+
+      setProductForm((p) => {
+        const existing = p.images
+          ? p.images.split("|").map((s) => s.trim()).filter(Boolean)
+          : [];
+        const merged = [...existing, ...urls];
+        return {
+          ...p,
+          images: merged.join("|"),
+          imageUrl: p.imageUrl || merged[0] || "",
+        };
+      });
+
+      showToast(`${urls.length} image${urls.length > 1 ? "s" : ""} uploaded`);
+    } catch (err) {
+      console.error(err);
+      showToast("Image upload failed", "error");
+    } finally {
+      setUploadingImages(false);
+      e.target.value = ""; // lets you re-select the same file later if needed
+    }
+  }
+
+  function removeProductImage(urlToRemove) {
+    setProductForm((p) => {
+      const remaining = p.images
+        .split("|")
+        .map((s) => s.trim())
+        .filter((u) => u && u !== urlToRemove);
+      return {
+        ...p,
+        images: remaining.join("|"),
+        imageUrl: p.imageUrl === urlToRemove ? (remaining[0] || "") : p.imageUrl,
+      };
+    });
+  }
+
   function resetProductForm() {
     setProductForm({
       name: "",
@@ -729,7 +815,7 @@ export default function Admin() {
       price: String(product.price ?? ""),
       description: product.description || "",
       imageUrl: product.imageUrl || "",
-      images: Array.isArray(product.images) ? product.images.join(", ") : "",
+      images: Array.isArray(product.images) ? product.images.join("|") : "",
     });
   }
 
@@ -747,7 +833,7 @@ export default function Admin() {
     }
 
     const parsedImages = productForm.images
-      .split(",")
+      .split("|")
       .map((item) => item.trim())
       .filter(Boolean);
 
@@ -1328,6 +1414,10 @@ export default function Admin() {
         deletingProductId={deletingProductId}
         resetProductForm={resetProductForm}
         productDraftSavedAt={productDraftSavedAt}
+        handleImageFilesSelected={handleImageFilesSelected}
+        removeProductImage={removeProductImage}
+        uploadingImages={uploadingImages}
+        uploadProgress={uploadProgress}
       />
 
     </div>

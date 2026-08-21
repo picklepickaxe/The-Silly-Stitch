@@ -8,15 +8,21 @@ const admin = require("firebase-admin");
 // (FIREBASE_SERVICE_ACCOUNT), never committed to git. Locally, you
 // can point this at your existing serviceAccountKey.json via a
 // .env file (see server/.env.example).
+
+//process.env -> render in this case because i deployed on render (waise, process is a part of node.js execution/ OS executing the node.js)
+//environment variables are an operating-system/runtime concept, not a Render-specific concept
+//index.js in itself is not a process. but, Node.js reads and executes index.js, and the resulting running application exists inside a Node.js process.
 function loadServiceAccount() {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    //JSON.parse -> converts the string into javascript object
   }
   // Local dev fallback: require the file directly if present.
   // eslint-disable-next-line global-require
   return require("./serviceAccountKey.json");
 }
 
+//note: this firebase to node.js initialisation only needs to be done ONCE in the same node process, so we will not be doing this again in the bot/rag pipeline
 admin.initializeApp({
   credential: admin.credential.cert(loadServiceAccount()),
 });
