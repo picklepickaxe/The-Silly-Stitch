@@ -15,7 +15,7 @@ export default function ProductCard({ product, onClick, skeleton = false }) {
         </div>
 
         {/* Floating icon placeholder */}
-        <div className="absolute bottom-3 right-3 w-9 h-9 rounded-full bg-gray-200 dark:bg-[#2a2040]" />
+        <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-gray-200 dark:bg-[#2a2040]" />
       </div>
     );
   }
@@ -61,7 +61,7 @@ export default function ProductCard({ product, onClick, skeleton = false }) {
       </div>
 
       {/* Floating icon */}
-      <div className="absolute bottom-3 right-3 w-9 h-9 rounded-full bg-yarn dark:bg-[#2a1f3d] text-white dark:text-[#d4b8e0] flex items-center justify-center shadow">
+      <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 w-7 h-7 sm:w-9 sm:h-9 text-sm sm:text-base rounded-full bg-yarn dark:bg-[#2a1f3d] text-white dark:text-[#d4b8e0] flex items-center justify-center shadow">
         +
       </div>
     </div>
