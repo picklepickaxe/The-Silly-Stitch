@@ -807,6 +807,48 @@ export default function Admin() {
     }
   }
 
+    async function handleDeleteOrder(docId) {
+    const ok = window.confirm("Permanently delete this order? This cannot be undone.");
+    if (!ok) return;
+
+    setUpdatingId(docId + "_delete");
+    try {
+      await deleteDoc(doc(db, "orders", docId));
+      showToast("Order deleted");
+    } catch (err) {
+      console.error(err);
+      showToast("Could not delete order", "error");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function handleDeleteAllCancelled() {
+    const cancelledOrders = orders.filter((o) => o.status === "cancelled");
+    if (cancelledOrders.length === 0) {
+      showToast("No cancelled orders to delete", "error");
+      return;
+    }
+
+    const ok = window.confirm(
+      `Permanently delete all ${cancelledOrders.length} cancelled order${cancelledOrders.length > 1 ? "s" : ""}? This cannot be undone.`
+    );
+    if (!ok) return;
+
+    setUpdatingId("bulk_delete_cancelled");
+    try {
+      await Promise.all(
+        cancelledOrders.map((o) => deleteDoc(doc(db, "orders", o.docId)))
+      );
+      showToast(`${cancelledOrders.length} cancelled order${cancelledOrders.length > 1 ? "s" : ""} deleted`);
+    } catch (err) {
+      console.error(err);
+      showToast("Could not delete some orders", "error");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
   function startEditProduct(product) {
     setEditingProductId(product.docId);
     setProductForm({
@@ -1150,6 +1192,18 @@ export default function Admin() {
                       </button>
                     );
                   })}
+
+                  {counts.cancelled > 0 && (
+                    <button
+                      onClick={handleDeleteAllCancelled}
+                      disabled={updatingId === "bulk_delete_cancelled"}
+                      className="w-full rounded-xl border border-red-200 dark:border-red-800 px-3.5 py-2 text-xs font-medium text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 transition-colors"
+                    >
+                      {updatingId === "bulk_delete_cancelled"
+                        ? "Deleting..."
+                        : `Delete all cancelled (${counts.cancelled})`}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1368,6 +1422,14 @@ export default function Admin() {
                             >
                               {order.whatsappConfirmed && <CheckIcon />}
                               {order.whatsappConfirmed ? "WhatsApp confirmed" : "Mark WhatsApp confirmed"}
+                            </button>
+                                                        {/* Delete order */}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.docId); }}
+                              disabled={isUpdating}
+                              className="rounded-xl border border-red-200 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 transition-colors"
+                            >
+                              {updatingId === order.docId + "_delete" ? "Deleting..." : "Delete Order"}
                             </button>
                           </div>
                         </div>
