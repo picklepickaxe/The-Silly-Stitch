@@ -278,7 +278,7 @@ export default function Shop() {
 
       {/* Full-page load */}
       {loading && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 p-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 p-2 sm:p-4">
           {Array.from({ length: PAGE_SIZE }).map((_, i) => (
             <ProductCard key={`skeleton-init-${i}`} skeleton />
           ))}
@@ -296,7 +296,7 @@ export default function Shop() {
 
       {/* Product grid — only the current page's products */}
       {!loading && pageProducts.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 p-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 p-2 sm:p-4">
           {pageProducts.map((p) => (
             <ProductCard key={p.id} product={p} onClick={setSelectedProduct} />
           ))}

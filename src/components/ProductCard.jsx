@@ -35,7 +35,7 @@ export default function ProductCard({ product, onClick, skeleton = false }) {
   return (
     <div
       onClick={() => onClick(product)}
-      className="relative bg-white dark:bg-[#16122a] rounded-xl shadow-sm hover:shadow-2xl transition duration-300 cursor-pointer overflow-hidden border border-transparent dark:border-[#2a2040]"
+      className="relative min-w-0 bg-white dark:bg-[#16122a] rounded-xl shadow-sm hover:shadow-2xl transition duration-300 cursor-pointer overflow-hidden border border-transparent dark:border-[#2a2040]"
     >
       {/* Image */}
       <div className="aspect-[1/1] bg-gray-100 dark:bg-[#1e1a30]">
@@ -52,7 +52,7 @@ export default function ProductCard({ product, onClick, skeleton = false }) {
 
       {/* Content */}
       <div className="p-3">
-        <h2 className="font-medium text-base text-gray-900 dark:text-[#e0d4f0] leading-snug">
+        <h2 className="font-medium text-base text-gray-900 dark:text-[#e0d4f0] leading-snug break-words">
           {product.name}
         </h2>
         <p className="mt-1 text-yarn dark:text-[#d4b8e0] font-semibold text-sm">
