@@ -70,11 +70,11 @@ function metricsMiddleware(req, res, next) {
   next();
 }
 
-app.use(metricsMiddleware);
-
 // ─── Express setup ──────────────────────────────────────────────
 const app = express();
 app.use(express.json());
+
+app.use(metricsMiddleware);
 
 // Lock CORS to your real frontend origin(s) only.
 const ALLOWED_ORIGINS = [
