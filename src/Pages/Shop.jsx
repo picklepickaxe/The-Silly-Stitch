@@ -4,6 +4,7 @@ import { db } from "../firebase/Config";
 import PageContainer from "../components/PageContainer";
 import ProductCard from "../components/ProductCard";
 import { useCart } from "../context/CartContext";
+import { getThumbnailUrl } from "../utils/cloudinary";
 
 const PAGE_SIZE = 12;
 
@@ -31,8 +32,15 @@ function ProductOverlay({ product, onClose, onAddToCart }) {
           {imageList.map((img, i) => (
             <img
               key={i}
-              src={img}
+              // These thumbnails render at 160x160 (w-40 h-40), so request the
+              // same 400x400 preset ProductCard uses instead of the 800px
+              // detail size — matches display size and reuses the identical
+              // transform string, so the first image is a guaranteed CDN
+              // cache hit against the one already fetched in the grid.
+              src={getThumbnailUrl(img)}
               alt=""
+              width={400}
+              height={400}
               loading="lazy"
               decoding="async"
               className="w-40 h-40 rounded-xl object-cover flex-shrink-0"

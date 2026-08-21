@@ -1,3 +1,5 @@
+import { getThumbnailUrl } from "../utils/cloudinary";
+
 export default function ProductCard({ product, onClick, skeleton = false }) {
   // ── Skeleton tile ──────────────────────────────────────────────────────────
   if (skeleton) {
@@ -19,10 +21,16 @@ export default function ProductCard({ product, onClick, skeleton = false }) {
   }
 
   // ── Real tile ──────────────────────────────────────────────────────────────
-  const image =
+  const rawImage =
     product.images && product.images.length > 0
       ? product.images[0]
       : "/placeholder.webp";
+
+  // Grid tiles only need a small, square, cropped image — never the full-size
+  // upload. getThumbnailUrl requests a fixed 400x400 crop with f_auto/q_auto
+  // baked in, reusing the same transformation string across every card so
+  // Cloudinary's CDN can cache it instead of billing a fresh transform per view.
+  const image = getThumbnailUrl(rawImage);
 
   return (
     <div
@@ -34,6 +42,8 @@ export default function ProductCard({ product, onClick, skeleton = false }) {
         <img
           src={image}
           alt={product.name}
+          width={400}
+          height={400}
           loading="lazy"
           decoding="async"
           className="w-full h-full object-cover"

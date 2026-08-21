@@ -3,6 +3,8 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const admin = require("firebase-admin");
 
+
+
 // ─── Firebase Admin init ────────────────────────────────────────
 // The service account JSON is stored as a single env var on Render
 // (FIREBASE_SERVICE_ACCOUNT), never committed to git. Locally, you
@@ -28,6 +30,47 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
+
+// ─── Metrics: timing + cold-start detection ──────────────────────
+// Render's free tier actually kills the process on spin-down, so
+// "first request since this process booted" IS a cold start, not
+// just a guess based on idle time.
+const SERVER_BOOT_TIME = Date.now();
+let hasHandledFirstRequest = false;
+
+function metricsMiddleware(req, res, next) {
+  req._metricsStart = Date.now();
+  req._isColdStart = !hasHandledFirstRequest;
+  hasHandledFirstRequest = true;
+
+  res.on("finish", () => {
+    const durationMs = Date.now() - req._metricsStart;
+    const entry = {
+      route: req.originalUrl,
+      method: req.method,
+      statusCode: res.statusCode,
+      durationMs,
+      coldStart: req._isColdStart,
+      timeSinceBootMs: Date.now() - SERVER_BOOT_TIME,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    console.log(
+      `[metrics] ${req.method} ${req.originalUrl} → ${res.statusCode} in ${durationMs}ms${
+        req._isColdStart ? "  (COLD START)" : ""
+      }`
+    );
+
+    // Fire-and-forget: never block or slow down the actual response.
+    db.collection("server_metrics")
+      .add(entry)
+      .catch((err) => console.error("[metrics] Firestore write failed:", err.message));
+  });
+
+  next();
+}
+
+app.use(metricsMiddleware);
 
 // ─── Express setup ──────────────────────────────────────────────
 const app = express();
@@ -107,6 +150,8 @@ const placeOrderLimiter = rateLimit({
 
 // ─── Route: place an order ───────────────────────────────────────
 app.post("/placeOrder", requireRealUser, placeOrderLimiter, async (req, res) => {
+  const timings = { start: Date.now() };
+
   try {
     const { items, customerName, email, phone } = req.body || {};
 
@@ -135,9 +180,6 @@ app.post("/placeOrder", requireRealUser, placeOrderLimiter, async (req, res) => 
     }
 
     // --- aggregate quantities per product FIRST, then cap the total ---
-    // (previously the cap was checked per raw entry, so splitting one
-    // product across multiple cart entries could bypass it — e.g. three
-    // entries of {productId: "X", quantity: 20} summed to 60 units of X)
     const quantityByProductId = new Map();
     for (const raw of items) {
       const productId = raw?.productId;
@@ -160,10 +202,14 @@ app.post("/placeOrder", requireRealUser, placeOrderLimiter, async (req, res) => 
       }
     }
 
+    timings.afterValidation = Date.now();
+
     // --- resolve REAL prices/names from Firestore, never trust client ---
     const productIds = [...quantityByProductId.keys()];
     const productRefs = productIds.map((id) => db.collection("products").doc(id));
     const productSnaps = await db.getAll(...productRefs);
+
+    timings.afterProductFetch = Date.now();
 
     const resolvedItems = [];
     let total = 0;
@@ -213,6 +259,16 @@ app.post("/placeOrder", requireRealUser, placeOrderLimiter, async (req, res) => 
     };
 
     const docRef = await db.collection("orders").add(orderPayload);
+
+    timings.afterOrderWrite = Date.now();
+
+    // Attach breakdown so metricsMiddleware can log/store it alongside this request
+    req._breakdown = {
+      validationMs: timings.afterValidation - timings.start,
+      productFetchMs: timings.afterProductFetch - timings.afterValidation,
+      orderWriteMs: timings.afterOrderWrite - timings.afterProductFetch,
+      totalMs: timings.afterOrderWrite - timings.start,
+    };
 
     return res.json({
       docId: docRef.id,
