@@ -1,12 +1,5 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import {
-  collection,
-  getDocs,
-  query,
-  orderBy,
-  limit,
-  startAfter,
-} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase/Config";
 import PageContainer from "../components/PageContainer";
 import ProductCard from "../components/ProductCard";
@@ -130,75 +123,98 @@ function ShopNavbar({ categoryOptions, category, setCategory, priceFilter, setPr
   );
 }
 
+// ─── Pagination Bar ───────────────────────────────────────────────────────────
+function PaginationBar({ currentPage, totalPages, onPageChange }) {
+  if (totalPages <= 1) return null;
+
+  // Build a compact page list: 1 ... 4 5 [6] 7 8 ... 20
+  const pages = [];
+  const windowSize = 1; // pages shown on each side of current
+
+  for (let p = 1; p <= totalPages; p++) {
+    const isEdge = p === 1 || p === totalPages;
+    const isNearCurrent = Math.abs(p - currentPage) <= windowSize;
+    if (isEdge || isNearCurrent) {
+      pages.push(p);
+    } else if (pages[pages.length - 1] !== "...") {
+      pages.push("...");
+    }
+  }
+
+  return (
+    <nav className="flex items-center justify-center gap-1.5 py-8 flex-wrap" aria-label="Pagination">
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="px-3 py-1.5 rounded-full text-sm border border-yarn/25 text-text dark:text-[#d4c6ea] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/70 dark:hover:bg-[#2d2144]/70 transition-colors"
+      >
+        ‹ Prev
+      </button>
+
+      {pages.map((p, i) =>
+        p === "..." ? (
+          <span key={`ellipsis-${i}`} className="px-2 text-sm text-gray-400 dark:text-[#6b5a80]">
+            …
+          </span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onPageChange(p)}
+            aria-current={p === currentPage ? "page" : undefined}
+            className={`w-9 h-9 rounded-full text-sm font-medium transition-colors
+              ${p === currentPage
+                ? "bg-yarn text-white"
+                : "text-text dark:text-[#d4c6ea] hover:bg-white/70 dark:hover:bg-[#2d2144]/70 border border-yarn/25"
+              }`}
+          >
+            {p}
+          </button>
+        )
+      )}
+
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="px-3 py-1.5 rounded-full text-sm border border-yarn/25 text-text dark:text-[#d4c6ea] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/70 dark:hover:bg-[#2d2144]/70 transition-colors"
+      >
+        Next ›
+      </button>
+    </nav>
+  );
+}
+
 // ─── Shop Page ────────────────────────────────────────────────────────────────
 export default function Shop() {
-  const [products, setProducts]                 = useState([]);
-  const [loading, setLoading]                   = useState(true);
-  const [loadingMore, setLoadingMore]           = useState(false);
-  const [hasMore, setHasMore]                   = useState(true);
-  const [selectedProduct, setSelectedProduct]   = useState(null);
+  const [products, setProducts]               = useState([]);
+  const [loading, setLoading]                 = useState(true);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
-  const [category, setCategory]     = useState("all");
+  const [category, setCategory]       = useState("all");
   const [priceFilter, setPriceFilter] = useState("all");
-  const [search, setSearch]         = useState("");
+  const [search, setSearch]           = useState("");
   const [categoryOptions, setCategoryOptions] = useState(["all"]);
 
-  // Firestore cursor — holds the last DocumentSnapshot of the previous page
-  const lastDocRef = useRef(null);
-
-  // Sentinel div at the bottom of the grid — watched by IntersectionObserver
-  const sentinelRef = useRef(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { addToCart } = useCart();
 
-  // ── Fetch a page from Firestore ──────────────────────────────────────────
-  const fetchPage = useCallback(async (isFirstPage = false) => {
-    // Guard: don't double-fetch while one is in flight
-    if (!isFirstPage && (loadingMore || !hasMore)) return;
-
-    isFirstPage ? setLoading(true) : setLoadingMore(true);
-
-    try {
-      let q = query(
-        collection(db, "products"),
-        orderBy("name"),          // keep a consistent order; change to "createdAt" etc. as needed
-        limit(PAGE_SIZE),
-        ...(isFirstPage || !lastDocRef.current
-          ? []
-          : [startAfter(lastDocRef.current)])
-      );
-
-      const snapshot = await getDocs(q);
-
-      const newProducts = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Remember the last doc for the next page cursor
-      lastDocRef.current = snapshot.docs[snapshot.docs.length - 1] ?? null;
-
-      // If we got fewer docs than PAGE_SIZE, we've reached the end
-      if (snapshot.docs.length < PAGE_SIZE) setHasMore(false);
-
-      setProducts((prev) => (isFirstPage ? newProducts : [...prev, ...newProducts]));
-    } catch (err) {
-      console.error("Failed to fetch products:", err);
-    } finally {
-      isFirstPage ? setLoading(false) : setLoadingMore(false);
-    }
-  }, [loadingMore, hasMore]);
-
-  // ── Initial load ──────────────────────────────────────────────────────────
+  // ── Fetch ALL products once (fine for a catalogue under ~a few hundred) ────
   useEffect(() => {
-    setProducts([]);
-    setHasMore(true);
-    lastDocRef.current = null;
-    fetchPage(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    async function fetchAllProducts() {
+      setLoading(true);
+      try {
+        const snap = await getDocs(collection(db, "products"));
+        const all = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        setProducts(all);
+      } catch (err) {
+        console.error("Failed to fetch products:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAllProducts();
   }, []);
 
-  
   // ── Fetch categories once for the filter pills ─────────────────────────────
   useEffect(() => {
     async function fetchCategories() {
@@ -213,28 +229,6 @@ export default function Shop() {
     fetchCategories();
   }, []);
 
-  // ── Reset & re-fetch when filters change ─────────────────────────────────
-  // NOTE: category / priceFilter / search are applied CLIENT-SIDE below.
-  // If your catalogue grows large, move these to Firestore `where()` clauses
-  // and trigger a fresh fetchPage(true) on each filter change instead.
-
-  // ── IntersectionObserver — fires when sentinel enters the viewport ─────────
-  useEffect(() => {
-    if (!sentinelRef.current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
-          fetchPage(false);
-        }
-      },
-      { rootMargin: "200px" } // start loading 200 px before the sentinel is visible
-    );
-
-    observer.observe(sentinelRef.current);
-    return () => observer.disconnect();
-  }, [hasMore, loadingMore, loading, fetchPage]);
-
   // ── Client-side filtering ─────────────────────────────────────────────────
   const filteredProducts = products.filter((p) => {
     const categoryMatch = category === "all" || p.category === category;
@@ -242,6 +236,24 @@ export default function Shop() {
     const searchMatch   = p.name.toLowerCase().includes(search.toLowerCase());
     return categoryMatch && priceMatch && searchMatch;
   });
+
+  // ── Reset to page 1 whenever a filter changes ──────────────────────────────
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [category, priceFilter, search]);
+
+  // ── Slice out just the current page ─────────────────────────────────────
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIdx = (safePage - 1) * PAGE_SIZE;
+  const pageProducts = filteredProducts.slice(startIdx, startIdx + PAGE_SIZE);
+
+  function goToPage(page) {
+    const clamped = Math.min(Math.max(1, page), totalPages);
+    setCurrentPage(clamped);
+    // Scroll back to the top of the grid so the new page is visible
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   return (
     <PageContainer variant="tight">
@@ -256,7 +268,7 @@ export default function Shop() {
         search={search}           setSearch={setSearch}
       />
 
-      {/* Initial full-page load */}
+      {/* Full-page load */}
       {loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-4">
           {Array.from({ length: PAGE_SIZE }).map((_, i) => (
@@ -274,29 +286,22 @@ export default function Shop() {
         </p>
       )}
 
-      {/* Product grid */}
-      {!loading && (
+      {/* Product grid — only the current page's products */}
+      {!loading && pageProducts.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-4">
-          {filteredProducts.map((p) => (
+          {pageProducts.map((p) => (
             <ProductCard key={p.id} product={p} onClick={setSelectedProduct} />
           ))}
-
-          {/* "Loading more" skeleton tiles appended at the end of the same grid */}
-          {loadingMore &&
-            Array.from({ length: 4 }).map((_, i) => (
-              <ProductCard key={`skeleton-more-${i}`} skeleton />
-            ))}
         </div>
       )}
 
-      {/* Sentinel — observed by IntersectionObserver to trigger next page */}
-      <div ref={sentinelRef} className="h-1" aria-hidden="true" />
-
-      {/* End-of-catalogue message */}
-      {!hasMore && !loading && products.length > 0 && (
-        <p className="text-center text-gray-400 dark:text-[#6b5a80] text-sm py-8">
-          You have seen everything!
-        </p>
+      {/* Numbered pagination */}
+      {!loading && (
+        <PaginationBar
+          currentPage={safePage}
+          totalPages={totalPages}
+          onPageChange={goToPage}
+        />
       )}
 
       <ProductOverlay

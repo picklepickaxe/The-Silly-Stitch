@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 
 const CartContext = createContext();
 
@@ -14,6 +14,25 @@ function normalizeProduct(product) {
   };
 }
 
+// ─── Toast ────────────────────────────────────────────────────────────────────
+// Rendered globally by CartProvider so it works no matter where addToCart
+// is called from (product grid, overlay, related products, etc.)
+function CartToast({ message, show }) {
+  return (
+    <div
+      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] transition-all duration-300 ease-out
+        ${show ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3 pointer-events-none"}`}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-center gap-2 bg-[#2c2140] text-white px-5 py-3 rounded-full shadow-lg text-sm font-medium">
+        <span></span>
+        <span>{message}</span>
+      </div>
+    </div>
+  );
+}
+
 export function CartProvider({ children }) {
   const [cartItems, setCartItems] = useState(() => {
     try {
@@ -24,9 +43,27 @@ export function CartProvider({ children }) {
     }
   });
 
+  const [toast, setToast] = useState({ show: false, message: "" });
+  const toastTimerRef = useRef(null);
+
   useEffect(() => {
     localStorage.setItem("silly-stitch-cart", JSON.stringify(cartItems));
   }, [cartItems]);
+
+  // Clean up the pending timer on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  const showToast = useCallback((message) => {
+    setToast({ show: true, message });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setToast((t) => ({ ...t, show: false }));
+    }, 2200);
+  }, []);
 
   function addToCart(product) {
     const normalized = normalizeProduct(product);
@@ -42,10 +79,14 @@ export function CartProvider({ children }) {
       }
       return [...prev, normalized];
     });
+
+    showToast(`Added "${normalized.name}" to cart`);
   }
 
   function removeFromCart(productId) {
+    const item = cartItems.find((i) => i.id === productId);
     setCartItems((prev) => prev.filter((item) => item.id !== productId));
+    if (item) showToast(`Removed "${item.name}" from cart`);
   }
 
   function updateQuantity(productId, quantity) {
@@ -108,6 +149,7 @@ export function CartProvider({ children }) {
       }}
     >
       {children}
+      <CartToast message={toast.message} show={toast.show} />
     </CartContext.Provider>
   );
 }
