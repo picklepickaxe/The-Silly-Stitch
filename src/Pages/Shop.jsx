@@ -47,6 +47,9 @@ function ProductOverlay({ product, onClose, onAddToCart }) {
             />
           ))}
         </div>
+        <span className="inline-flex rounded-full bg-pinky/30 dark:bg-[#3b2a4f] px-3 py-1 text-xs font-semibold capitalize text-yarn dark:text-[#d4b8e0]">
+          {product.category || "uncategorized"}
+        </span>
         <h2 className="text-2xl font-bold dark:text-[#e0d4f0]">{product.name}</h2>
         <p className="text-yarn font-bold text-lg mt-1">₹{product.price}</p>
         <p className="text-gray-600 dark:text-[#9b82b0] mt-3">{product.description}</p>
