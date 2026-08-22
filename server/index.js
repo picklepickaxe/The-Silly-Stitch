@@ -44,11 +44,12 @@ function metricsMiddleware(req, res, next) {
   hasHandledFirstRequest = true;
 
   res.on("finish", () => {
-    // Skip infra/platform pings to root — not real app traffic,
-    // and we don't want them polluting our latency metrics.
-    if (req.originalUrl === "/") {
-      return;
-    }
+    // Skip infra/platform pings — not real app traffic, and they'd
+// blow through Firestore's free write quota (Render alone pings
+// /health roughly every 5 seconds).
+      if (req.originalUrl === "/" || req.originalUrl === "/health") {
+         return;
+      }
 
     const durationMs = Date.now() - req._metricsStart;
     const entry = {
