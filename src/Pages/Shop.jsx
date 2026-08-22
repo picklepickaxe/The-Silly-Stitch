@@ -47,11 +47,15 @@ function ProductOverlay({ product, onClose, onAddToCart }) {
             />
           ))}
         </div>
-        <span className="inline-flex rounded-full bg-pinky/30 dark:bg-[#3b2a4f] px-3 py-1 text-xs font-semibold capitalize text-yarn dark:text-[#d4b8e0]">
-          {product.category || "uncategorized"}
-        </span>
-        <h2 className="text-2xl font-bold dark:text-[#e0d4f0]">{product.name}</h2>
-        <p className="text-yarn font-bold text-lg mt-1">₹{product.price}</p>
+                <h2 className="min-w-0 break-words text-2xl font-bold dark:text-[#e0d4f0]">
+          {product.name}
+        </h2>
+        <div className="flex items-center flex-wrap gap-2 mt-1">
+          <p className="text-yarn font-bold text-lg">₹{product.price}</p>
+          <span className="max-w-[42%] shrink-0 rounded-full bg-pinky/30 dark:bg-[#3b2a4f] px-3 py-1 text-center text-xs font-semibold capitalize break-words text-yarn dark:text-[#d4b8e0]">
+            {product.category || "uncategorized"}
+          </span>
+        </div>
         <p className="text-gray-600 dark:text-[#9b82b0] mt-3">{product.description}</p>
         <button
           onClick={() => { onAddToCart(product); onClose(); }}

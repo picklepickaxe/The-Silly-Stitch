@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { addDoc, collection, deleteDoc, onSnapshot, doc, updateDoc, orderBy, query, serverTimestamp } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase/Config";
@@ -395,6 +395,14 @@ function ProductsPanel({
   uploadingImages,
   uploadProgress,
 }) {
+  const productFormRef = useRef(null);
+
+  useEffect(() => {
+    if (editingProductId) {
+      productFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [editingProductId]);
+
   if (!open) return null;
 
   return (
@@ -416,7 +424,7 @@ function ProductsPanel({
           {productDraftSavedAt ? `Saved ✓ ${formatDraftTime(productDraftSavedAt)}` : "Autosave active"}
         </p>
 
-        <form onSubmit={handleSaveProduct} className="grid gap-3 sm:grid-cols-2 mb-4">
+        <form ref={productFormRef} onSubmit={handleSaveProduct} className="grid gap-3 sm:grid-cols-2 mb-4">
           <input
             value={productForm.name}
             onChange={(e) => setProductForm((p) => ({ ...p, name: e.target.value }))}
