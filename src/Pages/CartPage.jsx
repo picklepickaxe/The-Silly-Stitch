@@ -35,6 +35,7 @@ function normalizeWhatsappNumber(value) {
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart, clearCart, totalPrice, totalItems } = useCart();
   const { isLoggedIn, openAuthModal, user, profile } = useAuth();
+  const [resumeCheckoutAfterAuth, setResumeCheckoutAfterAuth] = useState(false);
 
   // Name and email now come from the account, not typed in here.
   const accountName = profile?.name?.trim() || user?.displayName?.trim() || "";
@@ -56,6 +57,21 @@ export default function Cart() {
     if (!isLoggedIn) return true; // phone alone is enough pre-login; login gate happens on click
     return Boolean(accountName) && Boolean(accountEmail) && /^\d{10}$/.test(phone.trim());
   }, [isLoggedIn, accountName, accountEmail, phone]);
+
+  useEffect(() => {
+    if (!resumeCheckoutAfterAuth || !isLoggedIn) return;
+
+    setResumeCheckoutAfterAuth(false);
+
+    if (!cartItems.length || placingOrder) return;
+    if (!isFormValid) {
+      setError("Please add a valid 10-digit WhatsApp number to continue.");
+      return;
+    }
+
+    setError("");
+    setShowPolicyModal(true);
+  }, [resumeCheckoutAfterAuth, isLoggedIn, cartItems.length, placingOrder, isFormValid]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -163,7 +179,10 @@ export default function Cart() {
     if (!cartItems.length || placingOrder) return;
 
     if (!isLoggedIn) {
-      openAuthModal({ mode: "login", onSuccess: () => handleOrderNow() });
+      openAuthModal({
+        mode: "login",
+        onSuccess: () => setResumeCheckoutAfterAuth(true),
+      });
       return;
     }
 
@@ -353,7 +372,7 @@ export default function Cart() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => openAuthModal({ mode: "login", onSuccess: () => handleOrderNow() })}
+                    onClick={handleOrderNow}
                     className="mt-3 text-sm font-semibold text-yarn hover:underline"
                   >
                     Log in
