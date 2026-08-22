@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 export default function AuthModal() {
-  const { modalOpen, modalMode, closeAuthModal, handleAuthSuccess, signup, login, loginWithGoogle } = useAuth();
+  const { modalOpen, modalMode, isLoggedIn, closeAuthModal, handleAuthSuccess, signup, login, loginWithGoogle } = useAuth();
 
   const [mode, setMode] = useState(modalMode);
   const [name, setName] = useState("");
@@ -15,6 +15,12 @@ export default function AuthModal() {
   useEffect(() => {
     setMode(modalMode);
   }, [modalMode]);
+
+  useEffect(() => {
+    if (!modalOpen || !isLoggedIn) return;
+    resetFields();
+    closeAuthModal();
+  }, [modalOpen, isLoggedIn]);
 
   if (!modalOpen) return null;
 
