@@ -4,12 +4,18 @@ import { db } from "../firebase/Config";
 import PageContainer from "../components/PageContainer";
 import ProductCard from "../components/ProductCard";
 import { useCart } from "../context/CartContext";
-import { getThumbnailUrl } from "../utils/cloudinary";
+import { getThumbnailUrl, getDetailUrl } from "../utils/cloudinary";
 
 const PAGE_SIZE = 12;
 
 // ─── Product Overlay ──────────────────────────────────────────────────────────
 function ProductOverlay({ product, onClose, onAddToCart }) {
+  const [lightboxImage, setLightboxImage] = useState(null);
+
+  useEffect(() => {
+    setLightboxImage(null); // close lightbox whenever a new product opens
+  }, [product]);
+
   if (!product) return null;
 
   const imageList =
@@ -20,51 +26,72 @@ function ProductOverlay({ product, onClose, onAddToCart }) {
       : ["/placeholder.webp"];
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="
-        absolute bottom-0 w-full bg-white dark:bg-[#16122a] rounded-t-3xl p-6
-        lg:bottom-auto lg:top-1/2 lg:left-1/2
-        lg:-translate-x-1/2 lg:-translate-y-1/2
-        lg:max-w-3xl lg:rounded-3xl
-      ">
-        <div className="flex gap-4 overflow-x-auto mb-4">
-          {imageList.map((img, i) => (
-            <img
-              key={i}
-              // These thumbnails render at 160x160 (w-40 h-40), so request the
-              // same 400x400 preset ProductCard uses instead of the 800px
-              // detail size — matches display size and reuses the identical
-              // transform string, so the first image is a guaranteed CDN
-              // cache hit against the one already fetched in the grid.
-              src={getThumbnailUrl(img)}
-              alt=""
-              width={400}
-              height={400}
-              loading="lazy"
-              decoding="async"
-              className="w-40 h-40 rounded-xl object-cover flex-shrink-0"
-            />
-          ))}
+    <>
+      <div className="fixed inset-0 z-50">
+        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+        <div className="
+          absolute bottom-0 w-full bg-white dark:bg-[#16122a] rounded-t-3xl p-6
+          lg:bottom-auto lg:top-1/2 lg:left-1/2
+          lg:-translate-x-1/2 lg:-translate-y-1/2
+          lg:max-w-3xl lg:rounded-3xl
+        ">
+          <div className="flex gap-4 overflow-x-auto mb-4">
+            {imageList.map((img, i) => (
+              <img
+                key={i}
+                src={getThumbnailUrl(img)}
+                alt=""
+                width={400}
+                height={400}
+                loading="lazy"
+                decoding="async"
+                onClick={() => setLightboxImage(img)}
+                className="w-40 h-40 rounded-xl object-cover flex-shrink-0 cursor-zoom-in"
+              />
+            ))}
+          </div>
+
+          <h2 className="min-w-0 break-words text-2xl font-bold dark:text-[#e0d4f0]">
+            {product.name}
+          </h2>
+          <div className="flex items-center flex-wrap gap-2 mt-1">
+            <p className="text-yarn font-bold text-lg">₹{product.price}</p>
+            <span className="max-w-[42%] shrink-0 rounded-full bg-pinky/30 dark:bg-[#3b2a4f] px-3 py-1 text-center text-xs font-semibold capitalize break-words text-yarn dark:text-[#d4b8e0]">
+              {product.category || "uncategorized"}
+            </span>
+          </div>
+          <p className="text-gray-600 dark:text-[#9b82b0] mt-3">{product.description}</p>
+          <button
+            onClick={() => { onAddToCart(product); onClose(); }}
+            className="mt-6 w-full bg-yarn text-white py-3 rounded-xl font-semibold"
+          >
+            🛒 Add to cart
+          </button>
         </div>
-                <h2 className="min-w-0 break-words text-2xl font-bold dark:text-[#e0d4f0]">
-          {product.name}
-        </h2>
-        <div className="flex items-center flex-wrap gap-2 mt-1">
-          <p className="text-yarn font-bold text-lg">₹{product.price}</p>
-          <span className="max-w-[42%] shrink-0 rounded-full bg-pinky/30 dark:bg-[#3b2a4f] px-3 py-1 text-center text-xs font-semibold capitalize break-words text-yarn dark:text-[#d4b8e0]">
-            {product.category || "uncategorized"}
-          </span>
-        </div>
-        <p className="text-gray-600 dark:text-[#9b82b0] mt-3">{product.description}</p>
-        <button
-          onClick={() => { onAddToCart(product); onClose(); }}
-          className="mt-6 w-full bg-yarn text-white py-3 rounded-xl font-semibold"
-        >
-          🛒 Add to cart
-        </button>
       </div>
-    </div>
+
+      {/* Lightbox — opens on top when a thumbnail is tapped */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          <button
+            onClick={() => setLightboxImage(null)}
+            aria-label="Close"
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-2xl leading-none transition-colors"
+          >
+            ×
+          </button>
+          <img
+            src={getDetailUrl(lightboxImage)}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-[90vh] w-auto h-auto object-contain rounded-lg"
+          />
+        </div>
+      )}
+    </>
   );
 }
 

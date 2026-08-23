@@ -386,6 +386,15 @@ export default function Cart() {
                 </p>
               )}
 
+              <div className="mt-4 pt-3 border-t border-dashed border-yarn/20 dark:border-[#3d2f5a] text-center">
+  <p className="text-yarn/70 dark:text-[#c0aad8] text-sm mb-1 select-none">
+    𑣲⋆ ₍^. .^₎⟆ .☘︎ ݁˖
+  </p>
+  <p className="text-[12px] text-text/70 dark:text-[#a78dbd]">
+    IGDTUW students: your order is handed over on campus only, with no shipping charges.
+  </p>
+</div>
+
               <button
                 type="button"
                 onClick={handleOrderNow}

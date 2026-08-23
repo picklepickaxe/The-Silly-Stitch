@@ -84,8 +84,8 @@ export function getCloudinaryUrl(url, { width, height, crop = "fill" } = {}) {
 // distinct transformation string as its own derived asset; reusing the same
 // string everywhere means later requests hit the CDN cache (free) instead
 // of generating a new derived asset (billed) each time.
-export const THUMB_TRANSFORM = { width: 400, height: 400, crop: "fill" }; // grid tiles
-export const DETAIL_TRANSFORM = { width: 800 };                          // overlay / product detail
+export const THUMB_TRANSFORM = { width: 400, height: 400, crop: "fill" }; // grid tiles + overlay strip
+export const DETAIL_TRANSFORM = { width: 1000, crop: "limit"};                          // used only for the lightbox now
 
 export function getThumbnailUrl(url) {
   return getCloudinaryUrl(url, THUMB_TRANSFORM);
