@@ -264,7 +264,12 @@ app.post("/placeOrder", requireRealUser, placeOrderLimiter, async (req, res) => 
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
-    const docRef = await db.collection("orders").add(orderPayload);
+    const orderRef = db.collection("orders").doc();
+    const docId = orderRef.id;
+
+    orderRef.set(orderPayload).catch((err) => {
+      console.error(`[placeOrder] Failed to persist order ${orderId}:`, err.message);
+    });
 
     timings.afterOrderWrite = Date.now();
 
@@ -277,7 +282,7 @@ app.post("/placeOrder", requireRealUser, placeOrderLimiter, async (req, res) => 
     };
 
     return res.json({
-      docId: docRef.id,
+      docId,
       orderId,
       total,
       items: resolvedItems,

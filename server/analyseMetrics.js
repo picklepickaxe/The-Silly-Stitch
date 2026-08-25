@@ -6,10 +6,11 @@
 //   node analyseMetrics.js /placeOrder 2026-08-20     -> only docs created ON or AFTER this date
 //   node analyseMetrics.js /placeOrder 2026-08-15 2026-08-20  -> only docs BETWEEN these dates
 //
-// This lets you compare a "before" window (pre keep-alive pinger) against
+// This lets you compare a "before" window (pre fire-and-forget fix) against
 // an "after" window, to get real numbers like:
 //   "cold starts dropped from X% of requests to Y%"
 //   "average response time improved from Xms to Yms"
+//   "p99 latency stabilized under Xms"
 
 const admin = require("firebase-admin");
 const serviceAccount = require("./serviceAccountKey.json");
@@ -55,14 +56,24 @@ async function main() {
     return;
   }
 
+  function percentile(sortedArr, p) {
+    if (sortedArr.length === 0) return 0;
+    const idx = Math.ceil((p / 100) * sortedArr.length) - 1;
+    return sortedArr[Math.min(Math.max(idx, 0), sortedArr.length - 1)];
+  }
+
   const rows = [];
   for (const [key, durations] of groups.entries()) {
     const sum = durations.reduce((a, b) => a + b, 0);
     const avg = sum / durations.length;
+    const sorted = [...durations].sort((a, b) => a - b);
     rows.push({
       route_coldStart: key,
       count: durations.length,
       avgMs: Math.round(avg),
+      p50Ms: percentile(sorted, 50),
+      p95Ms: percentile(sorted, 95),
+      p99Ms: percentile(sorted, 99),
       minMs: Math.min(...durations),
       maxMs: Math.max(...durations),
     });
