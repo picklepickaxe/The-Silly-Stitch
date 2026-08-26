@@ -29,7 +29,12 @@ async function main() {
   const startDate = startDateArg ? new Date(startDateArg) : null;
   const endDate = endDateArg ? new Date(endDateArg) : null;
 
-  const snap = await db.collection("server_metrics").get();
+  let query = db.collection("server_metrics");
+  if (routeFilter) query = query.where("route", "==", routeFilter);
+  if (startDate) query = query.where("createdAt", ">=", admin.firestore.Timestamp.fromDate(startDate));
+  if (endDate) query = query.where("createdAt", "<=", admin.firestore.Timestamp.fromDate(endDate));
+
+  const snap = await query.get();
 
   const groups = new Map();
   let totalInRange = 0;
